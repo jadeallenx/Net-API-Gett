@@ -28,4 +28,12 @@ has 'download' => (
     is => 'ro',
 );
 
+has 'size' => (
+    is => 'ro',
+);
+
+has 'created' => (
+    is => 'ro',
+);
+
 1;

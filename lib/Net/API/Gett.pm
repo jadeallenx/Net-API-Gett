@@ -111,6 +111,7 @@ has 'ua' => (
 
 has 'user' => (
     is => 'rw',
+    predicate => 'has_user',
     isa => quote_sub q{ die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
 );
 
@@ -163,7 +164,7 @@ sub _send {
 sub _build_user {
     my $self = shift;
     my $uref = shift; # hashref https://open.ge.tt/1/doc/rest#users/me
-    
+
     return undef unless ref($uref) eq "HASH";
 
     return Net::API::Gett::User->new(
@@ -203,7 +204,120 @@ sub login {
     }
 }
 
+sub my_user_data {
+    my $self = shift;
 
+    $self->login unless $self->has_access_token;
+
+    my $endpoint = "/users/me?accesstoken=" . $self->access_token;
+
+    my $response = $self->_send('GET', $endpoint);
+
+    if ( $response ) {
+        $self->user( $self->_build_user($response) );
+        return $self->user;
+    }
+    else {
+        return undef;
+    }
+}
+
+sub get_shares {
+    my $self = shift;
+    my $offset = shift;
+    my $limit = shift;
+
+    $self->login unless $self->has_access_token;
+
+    my $endpoint = "/shares?accesstoken=" . $self->access_token;
+
+    if ( $offset && looks_like_number $offset ) {
+        $endpoint .= "&skip=$offset";
+    }
+
+    if ( $limit && looks_like_number $limit ) {
+        $endpoint .= "&limit=$limit";
+    }
+
+    my $response = $self->_send('GET', $endpoint);
+
+    if ( $response ) {
+        foreach my $share_href ( @{ $response } ) {
+            my $share = $self->_build_share($share_href);
+            $self->add_share($share);
+        }
+        return $self->shares;
+    }
+    else {
+        return undef;
+    }
+}
+
+sub get_share {
+    my $self = shift;
+    my $sharename = shift;
+
+    my $response = $self->_send('GET', "/shares/$sharename");
+
+    if ( $response ) {
+        my $share = $self->_build_share($response);
+        $self->add_share($share);
+        return $share;
+    }
+    else {
+        return undef;
+    }
+}
+
+sub _build_share {
+    my $self = shift;
+    my $share_href = shift;
+
+    my $share = Net::API::Gett::Share->new(
+        sharename => $share_href->{'sharename'},
+        created => $share_href->{'created'},
+        title => $share_href->{'title'},
+    );
+    foreach my $file_href ( @{ $share_href->{'files'} } ) {
+        next unless defined $file_href;
+        my $file = Net::API::Gett::File->new(
+            filename => $file_href->{'filename'},
+            size => $file_href->{'size'},
+            created => $file_href->{'created'},
+            fileid => $file_href->{'fileid'},
+            downloads => $file_href->{'downloads'},
+            readystate => $file_href->{'readystate'},
+            url => $file_href->{'getturl'},
+            download => $file_href->{'downloadurl'},
+        );
+        $share->add_file($file);
+    }
+
+    return $share;
+}
+
+sub add_share {
+    my $self = shift;
+    my $share = shift;
+
+    return undef unless ref($share) =~ /Share/;
+
+    my $sharename = $share->sharename();
+
+    $self->{'shares'}->{$sharename} = $share;
+}
+
+sub shares {
+    my $self = shift;
+
+    if ( @_ ) {
+        return map { $self->{'shares'}->{$_} } @_;
+    }
+
+    return () unless exists $self->{'shares'};
+
+    return values %{ $self->{'shares'} };
+}
 
 
 
