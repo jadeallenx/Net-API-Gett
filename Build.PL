@@ -1,4 +1,3 @@
-use 5.006;
 use strict;
 use warnings;
 use Module::Build;
@@ -9,10 +8,17 @@ my $builder = Module::Build->new(
     dist_author         => q{Mark Allen <mrallen1@yahoo.com>},
     dist_version_from   => 'lib/Net/API/Gett.pm',
     build_requires => {
-        'Test::More' => 0,
+        'Test::More'  => 0,
+        'Moo'         => 0,
+        'Sub::Quote'  => 0,
+        'LWP'         => 0,
+        'JSON'        => 0,
+        'File::Slurp' => 0,
+
     },
     requires => {
-        'perl' => 5.006,
+        'perl' => 5.010,
+        'LWP::Protocol::https' => 0,
     },
     add_to_cleanup      => [ 'Net-API-Gett-*' ],
     create_makefile_pl => 'traditional',

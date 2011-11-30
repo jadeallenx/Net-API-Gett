@@ -6,7 +6,7 @@ use Carp qw(croak);
 
 has 'userid' => (
     is => 'ro',
-    isa => quote_sub q{ croak "$_[0] isn't alphanumeric\n" unless $_[0] =~ /[\w-]+/ },
+    isa => sub { croak "$_[0] isn't alphanumeric\n" unless $_[0] =~ /[\w-]+/ },
 );
 
 has 'fullname' => (

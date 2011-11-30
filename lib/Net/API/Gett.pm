@@ -14,6 +14,8 @@ use Scalar::Util qw(looks_like_number);
 use File::Slurp qw(read_file);
 use Carp qw(croak);
 
+use Data::Printer;
+
 use Net::API::Gett::User;
 use Net::API::Gett::Share;
 use Net::API::Gett::File;
@@ -60,56 +62,56 @@ our $VERSION = '0.01';
 has 'api_key' => ( 
     is        => 'ro', 
     required  => 1,
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless /[a-z0-9]+/ }
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ }
 );
 
 has 'email' => (
     is => 'ro',
     required => 1,
-    isa => quote_sub q{ die "$_[0] is not email" unless /.+@.+/ }
+    isa => quote_sub q{ die "$_[0] is not email" unless $_[0] =~ /.+@.+/ }
 );
 
 has 'password' => (
     is => 'ro',
     required => 1,
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless /\w+/ }
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ }
 );
 
 has 'access_token' => (
     is        => 'rw',
     predicate => 'has_access_token',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless /[\w\.-]+/ }
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
 );
 
 has 'access_token_expiration' => (
     is        => 'rw',
-    isa => quote_sub q{ die "$_[0] is not a number" unless looks_like_number($_[0]) }
+    isa => sub { die "$_[0] is not a number" unless looks_like_number $_[0] }
 );
 
 has 'refresh_token' => (
     is        => 'rw',
     predicate => 'has_refresh_token',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless /[\w\.-]+/ }
+    isa => sub { die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
 );
 
 has 'base_url' => (
     is        => 'rw',
-    default   => 'https://open.ge.tt/1',
+    default   => sub { 'https://open.ge.tt/1' },
 );
 
 has 'ua' => (
     is => 'rw',
-    isa => quote_sub q{ die "$_[0] is not LWP::UserAgent unless ref($_[0]) =~ /LWP::UserAgent/ },
-    default => quote_sub q{ 
+    default => sub { 
         my $ua = LWP::UserAgent->new(); 
-        $ua->user_agent("Net-API-Gett/$VERSION/(Perl)"); 
+        $ua->agent("Net-API-Gett/$VERSION/(Perl)"); 
         return $ua;
     },
+    isa => sub { die "$_[0] is not LWP::UserAgent" unless ref($_[0])=~/UserAgent/ },
 );
 
 has 'user' => (
     is => 'rw',
-    isa => quote_sub q{ die "$_[0] is not Net::API::Gett::User unless ref($_[0]) =~ /User/ },
+    isa => quote_sub q{ die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
 );
 
 sub _encode {
@@ -131,29 +133,30 @@ sub _send {
     my $method = uc shift;
     my $endpoint = shift;
     my $data = shift;
-    my $headers = shift;
 
     my $url = $self->base_url . $endpoint;
 
-    my $response;
+    my $req;
     if ( $method eq "POST" ) {
-        $response = $self->ua->request("POST $url", $headers, $data);
-    }
-    elsif ( $method eq "GET" ) {
-        $response = $self->ua->request("GET $url", $headers);
+        $req = POST $url, Content => $data;
     }
     elsif ( $method eq "PUT" ) {
-        $response = $self->ua->request("PUT $url", $headers, $data);
+        $req = PUT $url, Content => $data;
+    }
+    elsif ( $method eq "GET" ) {
+        $req = GET $url;
     }
     else {
         croak "$method is not supported.";
     }
 
+    my $response = $self->ua->request($req);
+
     if ( $response->is_success ) {
         return $self->_decode($response->content());
     }
     else {
-        croak "$method $url said " . $response->status_line . "\n";
+        croak "$method $url said " . $response->status_line;
     }
 }
 
@@ -183,7 +186,7 @@ sub login {
         $self->password);
 
 
-    my $response = $self->_send('POST', '/user/login', $self->_encode(\%hr));
+    my $response = $self->_send('POST', '/users/login', $self->_encode(\%hr));
 
     # $response is a hashref
     # see https://open.ge.tt/1/doc/rest#users/login for response keys
@@ -191,7 +194,7 @@ sub login {
     if ( $response ) {
         $self->access_token( $response->{'accesstoken'} );
         $self->access_token_expiration( time + $response->{'expires'} );
-        $self->refreshtoken( $response->{'refreshtoken'} );
+        $self->refresh_token( $response->{'refreshtoken'} );
         $self->user( $self->_build_user( $response->{'user'} ) );
         return $response;
     }
