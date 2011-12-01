@@ -51,9 +51,9 @@ our $VERSION = '0.01';
 
     die "Can't read $file: $!" unless -r $file;
 
-    my $url = $gett->share("My awesome example", $file);
+    my $f = $gett->upload_file($file, { title => "My Awesome File" });
 
-    say "$file is now available at $url";
+    say "$file is now available at " . $f->url;
 
 =head1 SUBROUTINES/METHODS
 
@@ -243,8 +243,10 @@ sub get_shares {
 
     if ( $response ) {
         foreach my $share_href ( @{ $response } ) {
-            my $share = $self->_build_share($share_href);
-            $self->add_share($share);
+            next unless $share_href;
+            $self->add_share(
+                $self->_build_share($share_href)
+            );
         }
         return $self->shares;
     }
@@ -269,6 +271,117 @@ sub get_share {
     }
 }
 
+sub create_share {
+    my $self = shift;
+    my $title = shift;
+
+    $self->login unless $self->has_access_token;
+
+    my @args = ('POST', "/shares/create?accesstoken=".$self->access_token);
+    if ( $title ) {
+        push @args, $self->_encode({ title => $title });
+    }
+    my $response = $self->_send(@args);
+
+    if ( $response ) {
+        my $share = $self->_build_share($response);
+        $self->add_share($share);
+        return $share;
+    }
+    else {
+        return undef;
+    }
+}
+        
+sub update_share {
+    my $self = shift;
+    my $name = shift;
+    my $title = shift;
+
+    $self->login unless $self->has_access_token;
+
+    my $response = $self->_send('POST', "/shares/$name/update?accesstoken=".$self->access_token, 
+            $self->_encode( { title => $title } )
+    );
+
+    if ( $response ) {
+        my $share = $self->_build_share($response);
+        $self->add_share($share);
+        return $share;
+    }
+    else {
+        return undef;
+    }
+}
+
+sub destroy_share {
+    my $self = shift;
+    my $name = shift;
+
+    $self->login unless $self->has_access_token;
+
+    my $response = $self->_send('POST', "/shares/$name/destroy?accesstoken=".$self->access_token);
+
+    if ( $response ) {
+        return 1;
+    }
+    else {
+        return undef;
+    }
+}
+
+sub get_file {
+    my $self = shift;
+    my $sharename = shift;
+    my $fileid = shift;
+
+    my $response = $self->_send('GET', "/files/$sharename/$fileid");
+
+    if ( $response ) {
+        return $self->_build_file($response);
+    }
+    else {
+        return undef;
+    }
+}
+
+sub _file_contents {
+    my $self = shift;
+    my $endpoint = $self->base_name . shift;
+
+    my $response = $self->ua->request(GET $endpoint);
+
+    if ( $response->is_success ) {
+        return $response->content();
+    }
+    else {
+        croak "$endpoint said " . $response->status_line;
+    }
+}
+
+sub get_file_contents {
+    my $self = shift;
+    my $sharename = shift;
+    my $fileid = shift;
+
+    return $self->_file_contents("/files/$sharename/$fileid/blob");
+}
+
+sub get_thumbnail {
+    my $self = shift;
+    my $sharename = shift;
+    my $fileid = shift;
+
+    return $self->_file_contents("/files/$sharename/$fileid/blob/thumb");
+}
+
+sub get_scaled_contents {
+    my $self = shift;
+    my ( $sharename, $fileid, $width, $height ) = @_;
+
+    return $self->_file_contents("/files/$sharename/$fileid/blob/scale?size=$width"."x$height");
+}
+
 sub _build_share {
     my $self = shift;
     my $share_href = shift;
@@ -279,21 +392,30 @@ sub _build_share {
         title => $share_href->{'title'},
     );
     foreach my $file_href ( @{ $share_href->{'files'} } ) {
-        next unless defined $file_href;
-        my $file = Net::API::Gett::File->new(
-            filename => $file_href->{'filename'},
-            size => $file_href->{'size'},
-            created => $file_href->{'created'},
-            fileid => $file_href->{'fileid'},
-            downloads => $file_href->{'downloads'},
-            readystate => $file_href->{'readystate'},
-            url => $file_href->{'getturl'},
-            download => $file_href->{'downloadurl'},
+        next unless $file_href;
+        $share->add_file(
+            $self->_build_file($file_href)
         );
-        $share->add_file($file);
     }
-
     return $share;
+}
+
+sub _build_file {
+    my $self = shift;
+    my $file_href = shift;
+
+    my $file = Net::API::Gett::File->new(
+        filename => $file_href->{'filename'},
+        size => $file_href->{'size'},
+        created => $file_href->{'created'},
+        fileid => $file_href->{'fileid'},
+        downloads => $file_href->{'downloads'},
+        readystate => $file_href->{'readystate'},
+        url => $file_href->{'getturl'},
+        download => $file_href->{'downloadurl'},
+    );
+
+    return $file;
 }
 
 sub add_share {
