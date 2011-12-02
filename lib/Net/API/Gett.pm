@@ -14,8 +14,6 @@ use Scalar::Util qw(looks_like_number);
 use File::Slurp qw(read_file);
 use Carp qw(croak);
 
-use Data::Printer;
-
 use Net::API::Gett::User;
 use Net::API::Gett::Share;
 use Net::API::Gett::File;
@@ -41,19 +39,34 @@ our $VERSION = '0.01';
     use v5.10;
     use Net::API::Gett;
 
+    # Get API Key from http://ge.tt/developers
+
     my $gett = Net::API::Gett->new( 
         api_key      => 'GettAPIKey',
         email        => 'me@example.com',
         password     => 'mysecret',
     );
 
-    my $file = "/some/path/name.txt";
 
-    die "Can't read $file: $!" unless -r $file;
+    my $file_obj = $gett->upload_file( 
+        filename => "ossm.txt",
+        contents => "/some/path/example.txt",
+           title => "My Awesome File", 
+        encoding => ":encoding(UTF-8)" 
+    );
 
-    my $f = $gett->upload_file($file, { title => "My Awesome File" });
+    say "File has been shared at " . $file_obj->url;
 
-    say "$file is now available at " . $f->url;
+    my $file_contents = $gett->get_file_contents( $file_obj->sharename, 
+            $file_obj->fileid );
+
+    open my $fh, ">:encoding(UTF-8)", "/some/path/example-copy.txt" 
+        or die $!;
+    print $fh $file_contents;
+    close $fh;
+
+    # clean up share and file(s)
+    $gett->destroy_share($file_obj->sharename);
 
 =head1 SUBROUTINES/METHODS
 
@@ -95,7 +108,7 @@ has 'refresh_token' => (
 );
 
 has 'base_url' => (
-    is        => 'rw',
+    is        => 'ro',
     default   => sub { 'https://open.ge.tt/1' },
 );
 
@@ -141,9 +154,6 @@ sub _send {
     if ( $method eq "POST" ) {
         $req = POST $url, Content => $data;
     }
-    elsif ( $method eq "PUT" ) {
-        $req = PUT $url, Content => $data;
-    }
     elsif ( $method eq "GET" ) {
         $req = GET $url;
     }
@@ -185,7 +195,6 @@ sub login {
         $self->api_key,
         $self->email,
         $self->password);
-
 
     my $response = $self->_send('POST', '/users/login', $self->_encode(\%hr));
 
@@ -258,6 +267,8 @@ sub get_shares {
 sub get_share {
     my $self = shift;
     my $sharename = shift;
+
+    return undef unless $sharename =~ /\w+/;
 
     my $response = $self->_send('GET', "/shares/$sharename");
 
@@ -345,9 +356,113 @@ sub get_file {
     }
 }
 
+sub upload_file {
+    my $self = shift;
+    my $opts = { @_ };
+
+    return undef unless ref($opts) eq "HASH";
+
+    my $sharename = $opts->{'sharename'};
+
+    if ( not $sharename ) {
+        my $share = $self->create_share($opts->{'title'});
+        $sharename = $share->sharename;
+    }
+
+    $self->login unless $self->has_access_token;
+
+    my $endpoint = "/files/$sharename/create?accesstoken=".$self->access_token;
+    
+    my $filename = $opts->{'filename'};
+
+    my $response = $self->_send('POST', $endpoint, $self->_encode( { filename => $filename } ));
+
+    if ( not exists $opts->{'contents'} ) {
+        $opts->{'contents'} = $filename;
+    }
+
+    if ( $response ) {
+        my $file = $self->_build_file($response);
+        if ( $file->readystate eq "remote" ) {
+            my $put_upload_url = $file->put_upload_url;
+            croak "Didn't get put upload URL from $endpoint" unless $put_upload_url;
+            if ( $self->send_file($put_upload_url, $opts->{'contents'}, $opts->{'encoding'}) ) {
+                return $file;
+            }
+            else {
+                croak "There was an error reading data from " . $opts->{'contents'};
+            }
+        }
+        else {
+            croak "$endpoint doesn't have right readystate";
+        }
+    }
+    else {
+        return undef;
+    }
+}
+
+sub send_file {
+    my $self = shift;
+    my $url = shift;
+    my $contents = shift;
+    my $encoding = shift || ":raw";
+
+    my $data = read_file($contents, { binmode => $encoding });
+
+    return 0 unless $data;
+
+    my $response = $self->ua->request(PUT $url, Content => $data);
+
+    if ( $response->is_success ) {
+        return 1;
+    }
+    else {
+        croak "$url said " . $response->status_line;
+    }
+}
+
+sub get_new_upload_url {
+    my $self = shift;
+    my $sharename = shift;
+    my $fileid = shift;
+
+    $self->login unless $self->has_access_token;
+
+    my $endpoint = "/files/$sharename/$fileid/upload?accesstoken=".$self->access_token;
+
+    my $response = $self->_send('GET', $endpoint);
+
+    if ( $response && exists $response->{'puturl'} ) {
+        return $response->{'puturl'};
+    }
+    else {
+        croak "Could not get a PUT url from $endpoint";
+    }
+}
+
+sub destroy_file {
+    my $self = shift;
+    my $sharename = shift;
+    my $fileid = shift;
+
+    $self->login unless $self->has_access_token;
+
+    my $endpoint = "/files/$sharename/$fileid/destroy?accesstoken=".$self->access_token;
+
+    my $response = $self->_send('POST', $endpoint);
+
+    if ( $response ) {
+        return 1;
+    }
+    else {
+        return undef;
+    }
+}
+        
 sub _file_contents {
     my $self = shift;
-    my $endpoint = $self->base_name . shift;
+    my $endpoint = $self->base_url . shift;
 
     my $response = $self->ua->request(GET $endpoint);
 
@@ -404,7 +519,7 @@ sub _build_file {
     my $self = shift;
     my $file_href = shift;
 
-    my $file = Net::API::Gett::File->new(
+    my %attrs = (
         filename => $file_href->{'filename'},
         size => $file_href->{'size'},
         created => $file_href->{'created'},
@@ -413,7 +528,17 @@ sub _build_file {
         readystate => $file_href->{'readystate'},
         url => $file_href->{'getturl'},
         download => $file_href->{'downloadurl'},
+        sharename => $file_href->{'sharename'},
     );
+
+    if ( exists $file_href->{'upload'} ) {
+        @attrs{'put_upload_url', 'post_upload_url'} = (
+                $file_href->{'upload'}->{'puturl'},
+                $file_href->{'upload'}->{'posturl'}
+        );
+    }
+
+    my $file = Net::API::Gett::File->new( %attrs );
 
     return $file;
 }
@@ -440,9 +565,6 @@ sub shares {
 
     return values %{ $self->{'shares'} };
 }
-
-
-
 
 =head1 AUTHOR
 

@@ -36,4 +36,16 @@ has 'created' => (
     is => 'ro',
 );
 
+has 'sharename' => (
+    is => 'ro',
+);
+
+has 'put_upload_url' => (
+    is => 'ro',
+);
+
+has 'post_upload_url' => (
+    is => 'ro',
+);
+
 1;
