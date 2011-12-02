@@ -68,7 +68,22 @@ our $VERSION = '0.01';
     # clean up share and file(s)
     $gett->destroy_share($file_obj->sharename);
 
-=head1 SUBROUTINES/METHODS
+=head1 ABOUT
+
+L<Gett|http://ge.tt> is a clutter-free file sharing service that allows its users to 
+share up to 2 GB of files for free.  They recently implemented a REST API; this is a 
+binding for the API. See L<http://ge.tt/developers> for full details and how to get an
+API key.
+
+=head1 ATTRIBUTES
+
+=over 
+
+=item api_key
+
+Scalar string. Read-only. Required at object construction.
+
+=back
 
 =cut
 
@@ -78,11 +93,31 @@ has 'api_key' => (
     isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ }
 );
 
+=over 
+
+=item email
+
+Scalar string. Read-only. Required at object construction.
+
+=back
+
+=cut
+
 has 'email' => (
     is => 'ro',
     required => 1,
     isa => quote_sub q{ die "$_[0] is not email" unless $_[0] =~ /.+@.+/ }
 );
+
+=over
+
+=item password
+
+Scalar string. Read-only. Required at object construction.
+
+=back
+
+=cut
 
 has 'password' => (
     is => 'ro',
@@ -90,16 +125,50 @@ has 'password' => (
     isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ }
 );
 
+=over
+
+=item access_token
+
+Scalar string. Populated by C<login> call.
+
+=back 
+
+=cut
+
 has 'access_token' => (
     is        => 'rw',
     predicate => 'has_access_token',
     isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
 );
 
+=over
+
+=item access_token_expiration
+
+Scalar integer. Unix epoch seconds until an access token is no longer valid which is 
+currently 24 hours (86400 seconds.) This value is suitable for use in a call to C<localtime()>.
+C<has_access_token()> predicate.
+
+=back
+
+=cut
+
 has 'access_token_expiration' => (
     is        => 'rw',
     isa => sub { die "$_[0] is not a number" unless looks_like_number $_[0] }
 );
+
+=over
+
+=item refresh_token
+
+Scalar string. Populated by C<login> call.  Can be used to generate a new valid
+access token without reusing an email/password login method.  C<has_refresh_token()> 
+predicate.
+
+=back
+
+=cut
 
 has 'refresh_token' => (
     is        => 'rw',
@@ -107,13 +176,34 @@ has 'refresh_token' => (
     isa => sub { die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
 );
 
+=over
+
+=item base_url
+
+Scalar string. Read-only. Populated at object construction. Default value: L<https://open.ge.tt/1>. 
+
+=back
+
+=cut
+
 has 'base_url' => (
     is        => 'ro',
     default   => sub { 'https://open.ge.tt/1' },
 );
 
+=over
+
+=item ua
+
+L<LWP::UserAgent> object. Read only. Populated at object construction. Uses a default L<LWP::UserAgent>
+if not supplied.
+
+=back
+
+=cut
+
 has 'ua' => (
-    is => 'rw',
+    is => 'ro',
     default => sub { 
         my $ua = LWP::UserAgent->new(); 
         $ua->agent("Net-API-Gett/$VERSION/(Perl)"); 
@@ -121,6 +211,17 @@ has 'ua' => (
     },
     isa => sub { die "$_[0] is not LWP::UserAgent" unless ref($_[0])=~/UserAgent/ },
 );
+
+=over
+
+=item user
+
+L<Net::API::Gett::User> object. Populated by C<login> and/or C<my_user_data>. 
+C<has_user()> predicate.
+
+=back
+
+=cut
 
 has 'user' => (
     is => 'rw',
@@ -186,6 +287,28 @@ sub _build_user {
     );
 }
 
+=head1 METHODS
+
+Unless otherwise noted, these methods die if an error occurs or if they get a response from the API
+which is not successful. If you need to handle errors more gracefully, use L<Try::Tiny> to catch fatal 
+errors.
+
+=head2 Account methods 
+
+=over
+
+=item login()
+
+This method populates the C<access_token>, C<refresh_token> and C<user> attributes.  It usually
+doesn't need to be explicitly called since methods which require an access token will automatically
+attempt to log in to the API and get one.
+
+Returns a perl hash representation of the JSON output for L<https://open.ge.tt/1/users/login>.
+
+=back
+
+=cut
+
 sub login {
     my $self = shift;
 
@@ -213,6 +336,17 @@ sub login {
     }
 }
 
+=over
+
+=item my_user_data()
+
+Retrieves (and/or refreshes) user data held in the C<user> attribute.  This method returns a
+L<Net::API::Gett::User> object.
+
+=back
+
+=cut
+
 sub my_user_data {
     my $self = shift;
 
@@ -231,6 +365,26 @@ sub my_user_data {
     }
 }
 
+=head2 Share functions
+
+All of these functions cache L<Net::API::Gett::Share> objects in the C<shares> attribute. 
+The cache is updated whenever calls return successfully from the API so the
+local cache will be in sync with remote information about a given share as long as
+no changes were made to a share outside of this library.
+
+=over
+
+=item get_shares()
+
+Retrieves B<all> share information for the given user.  Takes optional scalar integers 
+C<offset> and C<limit> parameters, respectively. 
+
+Returns a list of L<Net::API::Gett::Share> objects. 
+
+=back
+
+=cut
+
 sub get_shares {
     my $self = shift;
     my $offset = shift;
@@ -240,11 +394,11 @@ sub get_shares {
 
     my $endpoint = "/shares?accesstoken=" . $self->access_token;
 
-    if ( $offset && looks_like_number $offset ) {
+    if ( defined $offset && looks_like_number $offset ) {
         $endpoint .= "&skip=$offset";
     }
 
-    if ( $limit && looks_like_number $limit ) {
+    if ( defined $limit && looks_like_number $limit ) {
         $endpoint .= "&limit=$limit";
     }
 
@@ -264,6 +418,19 @@ sub get_shares {
     }
 }
 
+=over
+
+=item get_share()
+
+Retrieves (and/or refreshes cached) information about a specific single share. 
+Requires a C<sharename> parameter. 
+
+Returns a L<Net::API::Gett::Share> object.
+
+=back
+
+=cut
+
 sub get_share {
     my $self = shift;
     my $sharename = shift;
@@ -281,6 +448,19 @@ sub get_share {
         return undef;
     }
 }
+
+=over
+
+=item create_share()
+
+This method creates a new share instance to hold files. Takes an optional string scalar
+parameter which sets the share's title attribute.
+
+Returns the new share as a L<Net::API::Gett::Share> object.
+
+=back
+
+=cut
 
 sub create_share {
     my $self = shift;
@@ -303,6 +483,22 @@ sub create_share {
         return undef;
     }
 }
+
+=over
+
+=item update_share()
+
+This method updates share attributes.  At present, only the share title can be changed (or deleted), 
+so pass in a string to set a new title for a specific share.
+
+Calling this method with an empty parameter list or explicitly passing C<undef> 
+will B<delete> any title currently set on the share.
+
+Returns a L<Net::API::Gett:Share> object with updated values.
+
+=back
+
+=cut
         
 sub update_share {
     my $self = shift;
@@ -325,6 +521,17 @@ sub update_share {
     }
 }
 
+=over
+
+=item destroy_share()
+
+This method destroys the specified share and all of that share's files.  Returns a true boolean
+on success.
+
+=back
+
+=cut
+
 sub destroy_share {
     my $self = shift;
     my $name = shift;
@@ -334,12 +541,25 @@ sub destroy_share {
     my $response = $self->_send('POST', "/shares/$name/destroy?accesstoken=".$self->access_token);
 
     if ( $response ) {
+        delete $self->{'shares'}->{$name};
         return 1;
     }
     else {
         return undef;
     }
 }
+
+=head2 File functions
+
+=over
+
+=item get_file()
+
+Returns a L<Net::API::Gett::File> object given a C<sharename> and a C<fileid>.
+
+=back
+
+=cut
 
 sub get_file {
     my $self = shift;
@@ -355,6 +575,66 @@ sub get_file {
         return undef;
     }
 }
+
+=over
+
+=item upload_file()
+
+This method uploads a file to Gett. The following key/value pairs are valid:
+
+=over
+
+=item *
+
+sharename (optional) 
+    
+If not specified, a new share will be automatically created.
+
+=item *
+
+title (optional) 
+    
+If specified, this value is used when creating a new share to hold the file.
+
+=item * 
+
+filename (required) 
+    
+What to call the uploaded file when it's inside of the Gett service.
+
+=item *
+
+content (optional) 
+
+A representation of the file's contents.  This can be one of:
+
+=over
+
+=item A buffer
+
+=item An L<IO::Handle> object
+
+=item A FILEGLOB
+
+=item A pathname to a file to be read
+
+=back
+
+If not specified, the filename parameter is used as a pathname.
+
+=item *
+
+encoding
+
+An encoding scheme for the file content. By default it uses C<:raw>
+
+=back
+
+Returns a L<Net::API::Gett:File> object representing the uploaded file.
+
+=back
+
+=cut
 
 sub upload_file {
     my $self = shift;
@@ -402,6 +682,37 @@ sub upload_file {
     }
 }
 
+=over
+
+=item send_file()
+
+This method actually uploads the file to the Gett service. This method is normally invoked by the
+C<upload_file()> method, but it's a public method which might be useful in combination with 
+C<get_new_upload_url()>. It takes the following parameters:
+
+=over
+
+=item * 
+
+a PUT based Gett upload url
+
+=item * 
+
+a scalar representing the file contents which can be one of: a buffer, an L<IO::Handle> object, a FILEGLOB, or a 
+file pathname.
+
+=item *
+
+an encoding scheme. By default, it uses C<:raw> (see C<perldoc -f binmode> for more information.)
+
+=back
+
+Returns a true value on success.
+
+=back
+
+=cut
+
 sub send_file {
     my $self = shift;
     my $url = shift;
@@ -422,6 +733,17 @@ sub send_file {
     }
 }
 
+=over
+
+=item get_new_upload_url()
+
+This method returns a scalar PUT upload URL for the specified sharename/fileid parameters. 
+Potentially useful in combination with C<send_file()>.
+
+=back
+
+=cut
+
 sub get_new_upload_url {
     my $self = shift;
     my $sharename = shift;
@@ -440,6 +762,16 @@ sub get_new_upload_url {
         croak "Could not get a PUT url from $endpoint";
     }
 }
+
+=over
+
+=item destroy_file()
+
+This method destroys a file specified by the given sharename/fileid parameters. Returns a true value.
+
+=back
+
+=cut
 
 sub destroy_file {
     my $self = shift;
@@ -474,6 +806,17 @@ sub _file_contents {
     }
 }
 
+=over
+
+=item get_file_contents()
+
+This method retrieves the contents of a file in the Gett service given by the sharename/fileid parameters.
+You are responsible for outputting the file (if desired) with any appropriate encoding.
+
+=back
+
+=cut
+
 sub get_file_contents {
     my $self = shift;
     my $sharename = shift;
@@ -482,6 +825,17 @@ sub get_file_contents {
     return $self->_file_contents("/files/$sharename/$fileid/blob");
 }
 
+=over
+
+=item get_thumbnail()
+
+This method returns a thumbnail if the file in Gett is an image. Requires a
+sharename and fileid.
+
+=back
+
+=cut
+
 sub get_thumbnail {
     my $self = shift;
     my $sharename = shift;
@@ -489,6 +843,17 @@ sub get_thumbnail {
 
     return $self->_file_contents("/files/$sharename/$fileid/blob/thumb");
 }
+
+=over
+
+=item get_scaled_contents()
+
+This method returns scaled image data (assuming the file in Gett is an image.) Requires
+sharename, fileid, width and height paramters, respectively.
+
+=back
+
+=cut
 
 sub get_scaled_contents {
     my $self = shift;
@@ -543,6 +908,16 @@ sub _build_file {
     return $file;
 }
 
+=over
+
+=item add_share()
+
+This method populates/updates the L<Net::API::Gett:Share> object local cache.
+
+=back
+
+=cut
+
 sub add_share {
     my $self = shift;
     my $share = shift;
@@ -553,6 +928,21 @@ sub add_share {
 
     $self->{'shares'}->{$sharename} = $share;
 }
+
+=over
+
+=item shares()
+
+This method retrieves one or more cached L<Net::API::Gett::Share> objects. Objects are
+requested by sharename.  If no parameter list is specified, B<all> cached objects are 
+returned in an unordered list. (The list will B<not> be in the order shares were added
+to the cache.)
+
+If no objects are cached, this method returns an empty list.
+
+=back
+
+=cut
 
 sub shares {
     my $self = shift;
@@ -568,7 +958,7 @@ sub shares {
 
 =head1 AUTHOR
 
-Mark Allen, C<< <mrallen1 at yahoo.com> >>
+Mark Allen, C<mrallen1 at yahoo dot com>
 
 =head1 BUGS
 

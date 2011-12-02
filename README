@@ -1,16 +1,11 @@
 Net-API-Gett
 
-The README is used to introduce the module and provide instructions on
-how to install the module, any machine dependencies it may have (for
-example C compilers and installed libraries) and any other information
-that should be provided before the module is installed.
+Gett (http://ge.tt) is a clutter-free file sharing service that allows its users to 
+share up to 2 GB of files for free.  They recently implemented a REST API; this is a 
+binding for the API. See http://ge.tt/developers for full details and how to get an
+API key.
 
-A README file is required for CPAN modules since CPAN extracts the README
-file from a module distribution so that people browsing the archive
-can use it to get an idea of the module's uses. It is usually a good idea
-to provide version information here so that people can decide whether
-fixes for the module are worth downloading.
-
+Version: 0.01
 
 INSTALLATION
 
@@ -40,7 +35,10 @@ You can also look for information at:
         http://cpanratings.perl.org/d/Net-API-Gett
 
     Search CPAN
-        http://search.cpan.org/dist/Net-API-Gett/
+        https://metacpan.org/module/Net::API::Gett
+
+    Git Hub
+        https://github.com/mrallen1/Net-API-Gett
 
 
 LICENSE AND COPYRIGHT

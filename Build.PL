@@ -14,7 +14,6 @@ my $builder = Module::Build->new(
         'LWP'         => 0,
         'JSON'        => 0,
         'File::Slurp' => 0,
-
     },
     requires => {
         'perl' => 5.010,
