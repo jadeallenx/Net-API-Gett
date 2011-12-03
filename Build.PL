@@ -11,7 +11,7 @@ my $builder = Module::Build->new(
         'Test::More'  => 0,
     },
     requires => {
-        'perl' => 5.010,
+        'perl' => '5.010',
         'LWP::Protocol::https' => 0,
         'Moo'         => 0,
         'Sub::Quote'  => 0,
@@ -21,6 +21,12 @@ my $builder = Module::Build->new(
     },
     add_to_cleanup      => [ 'Net-API-Gett-*' ],
     create_makefile_pl => 'traditional',
+    meta_merge => {
+        resources => {
+            repository => 'https://github.com/mrallen1/Net-API-Gett.git',
+            KeyWords => ["file sharing", "gett", "REST API client"],
+        },
+    },
 );
 
 $builder->create_build_script();
