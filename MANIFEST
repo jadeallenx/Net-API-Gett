@@ -5,9 +5,10 @@ lib/Net/API/Gett/User.pm
 lib/Net/API/Gett/Share.pm
 lib/Net/API/Gett/File.pm
 MANIFEST			This list of files
+MANIFEST.SKIP
 README
+ignore.txt
 t/00-load.t
 t/01-basic.t
-t/02-author.t
 t/manifest.t
 t/pod.t
