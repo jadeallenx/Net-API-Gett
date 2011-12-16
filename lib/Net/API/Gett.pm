@@ -88,8 +88,7 @@ Scalar string. Read-only. Required at object construction.
 =cut
 
 has 'api_key' => ( 
-    is        => 'ro', 
-    required  => 1,
+    is  => 'ro',
     isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ }
 );
 
@@ -104,8 +103,7 @@ Scalar string. Read-only. Required at object construction.
 =cut
 
 has 'email' => (
-    is => 'ro',
-    required => 1,
+    is  => 'ro',
     isa => quote_sub q{ die "$_[0] is not email" unless $_[0] =~ /.+@.+/ }
 );
 
@@ -120,8 +118,7 @@ Scalar string. Read-only. Required at object construction.
 =cut
 
 has 'password' => (
-    is => 'ro',
-    required => 1,
+    is  => 'ro',
     isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ }
 );
 
@@ -229,6 +226,27 @@ has 'user' => (
     isa => quote_sub q{ die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
 );
 
+around BUILDARGS => sub {
+    my $orig  = shift;
+    my $class = shift;
+
+    my %params = @_;
+
+    unless (
+           $params{refresh_token}
+        || $params{access_token}
+        || ( $params{api_key} && $params{email} && $params{password} ) )
+    {
+        die(
+            "api_key, email and password are needed to create ",
+            "Net::API::Gett object. Or you can use refresh_token ",
+            "or access_token rather than api_key, email and password.\n",
+        );
+    }
+
+    return $class->$orig(@_);
+};
+
 sub _encode {
     my $self = shift;
     my $hr = shift;
@@ -313,11 +331,18 @@ sub login {
     my $self = shift;
 
     my %hr;
-
-    @hr{'apikey', 'email', 'password'} = ( 
-        $self->api_key,
-        $self->email,
-        $self->password);
+    if ( $self->api_key && $self->email && $self->password ) {
+        @hr{'apikey', 'email', 'password'} = (
+            $self->api_key,
+            $self->email,
+            $self->password);
+    }
+    elsif ( $self->refresh_token ) {
+        $hr{'refreshtoken'} = $self->refresh_token;
+    }
+    else {
+        return undef;
+    }
 
     my $response = $self->_send('POST', '/users/login', $self->_encode(\%hr));
 
