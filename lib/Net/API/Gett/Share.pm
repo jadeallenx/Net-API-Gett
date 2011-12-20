@@ -10,6 +10,8 @@ use Moo;
 use Sub::Quote;
 use Carp qw(croak);
 
+our $VERSION = '0.02';
+
 =head1 ATTRIBUTES
 
 These are read only attributes.  You normally shouldn't instantiate this class on its own, as the

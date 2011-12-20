@@ -4,6 +4,8 @@ use Moo;
 use Sub::Quote;
 use Carp qw(croak);
 
+our $VERSION = '0.02';
+
 =head1 NAME
 
 Net::API::Gett::User - Gett User object

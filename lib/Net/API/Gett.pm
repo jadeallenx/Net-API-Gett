@@ -28,11 +28,11 @@ Net::API::Gett - Perl bindings for Ge.tt API
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -46,7 +46,6 @@ our $VERSION = '0.01';
         email        => 'me@example.com',
         password     => 'mysecret',
     );
-
 
     my $file_obj = $gett->upload_file( 
         filename => "ossm.txt",
@@ -81,7 +80,7 @@ API key.
 
 =item api_key
 
-Scalar string. Read-only. Required at object construction.
+Scalar string. Read-only. C<has_api_key> predicate.
 
 =back
 
@@ -89,14 +88,15 @@ Scalar string. Read-only. Required at object construction.
 
 has 'api_key' => ( 
     is  => 'ro',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ }
+    predicate => 'has_api_key',
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ },
 );
 
 =over 
 
 =item email
 
-Scalar string. Read-only. Required at object construction.
+Scalar string. Read-only. C<has_email> predicate.
 
 =back
 
@@ -104,14 +104,15 @@ Scalar string. Read-only. Required at object construction.
 
 has 'email' => (
     is  => 'ro',
-    isa => quote_sub q{ die "$_[0] is not email" unless $_[0] =~ /.+@.+/ }
+    predicate => 'has_email',
+    isa => quote_sub q{ die "$_[0] is not email" unless $_[0] =~ /.+@.+/ },
 );
 
 =over
 
 =item password
 
-Scalar string. Read-only. Required at object construction.
+Scalar string. Read-only. C<has_password> predicate.
 
 =back
 
@@ -119,14 +120,15 @@ Scalar string. Read-only. Required at object construction.
 
 has 'password' => (
     is  => 'ro',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ }
+    predicate => 'has_password',
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ },
 );
 
 =over
 
 =item access_token
 
-Scalar string. Populated by C<login> call.
+Scalar string. Populated by C<login> call. C<has_access_token()> predicate.
 
 =back 
 
@@ -144,7 +146,6 @@ has 'access_token' => (
 
 Scalar integer. Unix epoch seconds until an access token is no longer valid which is 
 currently 24 hours (86400 seconds.) This value is suitable for use in a call to C<localtime()>.
-C<has_access_token()> predicate.
 
 =back
 
@@ -311,6 +312,28 @@ Unless otherwise noted, these methods die if an error occurs or if they get a re
 which is not successful. If you need to handle errors more gracefully, use L<Try::Tiny> to catch fatal 
 errors.
 
+=over
+
+=item new()
+
+This method instantiates a new object.  One of the following parameter argument lists is required at
+construction time:
+
+=over
+
+=item * a valid refresh token,
+
+=item * a valid access token, or,
+
+=item * a valid api key, email and password
+
+=back
+
+One of these three is required to pass in the access token parameter to the Gett API when it is required.
+(If an access token is not specified, the API will automatically attempt to log in and get one lazily.)
+
+=back
+
 =head2 Account methods 
 
 =over
@@ -319,7 +342,7 @@ errors.
 
 This method populates the C<access_token>, C<refresh_token> and C<user> attributes.  It usually
 doesn't need to be explicitly called since methods which require an access token will automatically
-attempt to log in to the API and get one.
+(and lazily) attempt to log in to the API and get one.
 
 Returns a perl hash representation of the JSON output for L<https://open.ge.tt/1/users/login>.
 
@@ -331,13 +354,13 @@ sub login {
     my $self = shift;
 
     my %hr;
-    if ( $self->api_key && $self->email && $self->password ) {
+    if ( $self->has_api_key && $self->has_email && $self->has_password ) {
         @hr{'apikey', 'email', 'password'} = (
             $self->api_key,
             $self->email,
             $self->password);
     }
-    elsif ( $self->refresh_token ) {
+    elsif ( $self->has_refresh_token ) {
         $hr{'refreshtoken'} = $self->refresh_token;
     }
     else {
@@ -1026,6 +1049,18 @@ L<https://github.com/mrallen1/Net-API-Gett>
 =head1 SEE ALSO
 
 L<Gett API documentation|http://ge.tt/developers>
+
+=head1 CONTRIBUTORS
+
+Thanks to the following for patches: 
+
+=over
+
+=item
+
+Keedi Kim (L<https://github.com/keedi>)
+
+=back
 
 =head1 LICENSE AND COPYRIGHT
 
