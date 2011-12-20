@@ -7,9 +7,6 @@ use v5.10;
 
 use Moo;
 use Sub::Quote;
-use JSON;
-use LWP::UserAgent;
-use HTTP::Request::Common;
 use Scalar::Util qw(looks_like_number);
 use File::Slurp qw(read_file);
 use Carp qw(croak);
@@ -174,41 +171,6 @@ has 'refresh_token' => (
     isa => sub { die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
 );
 
-=over
-
-=item base_url
-
-Scalar string. Read-only. Populated at object construction. Default value: L<https://open.ge.tt/1>. 
-
-=back
-
-=cut
-
-has 'base_url' => (
-    is        => 'ro',
-    default   => sub { 'https://open.ge.tt/1' },
-);
-
-=over
-
-=item ua
-
-L<LWP::UserAgent> object. Read only. Populated at object construction. Uses a default L<LWP::UserAgent>
-if not supplied.
-
-=back
-
-=cut
-
-has 'ua' => (
-    is => 'ro',
-    default => sub { 
-        my $ua = LWP::UserAgent->new(); 
-        $ua->agent("Net-API-Gett/$VERSION/(Perl)"); 
-        return $ua;
-    },
-    isa => sub { die "$_[0] is not LWP::UserAgent" unless ref($_[0])=~/UserAgent/ },
-);
 
 =over
 
@@ -247,49 +209,6 @@ around BUILDARGS => sub {
 
     return $class->$orig(@_);
 };
-
-sub _encode {
-    my $self = shift;
-    my $hr = shift;
-
-    return encode_json($hr);
-}
-
-sub _decode {
-    my $self = shift;
-    my $json = shift;
-
-    return decode_json($json);
-}
-
-sub _send {
-    my $self = shift;
-    my $method = uc shift;
-    my $endpoint = shift;
-    my $data = shift;
-
-    my $url = $self->base_url . $endpoint;
-
-    my $req;
-    if ( $method eq "POST" ) {
-        $req = POST $url, Content => $data;
-    }
-    elsif ( $method eq "GET" ) {
-        $req = GET $url;
-    }
-    else {
-        croak "$method is not supported.";
-    }
-
-    my $response = $self->ua->request($req);
-
-    if ( $response->is_success ) {
-        return $self->_decode($response->content());
-    }
-    else {
-        croak "$method $url said " . $response->status_line;
-    }
-}
 
 sub _build_user {
     my $self = shift;
@@ -773,12 +692,6 @@ sub send_file {
 
     my $response = $self->ua->request(PUT $url, Content => $data);
 
-    if ( $response->is_success ) {
-        return 1;
-    }
-    else {
-        croak "$url said " . $response->status_line;
-    }
 }
 
 =over
