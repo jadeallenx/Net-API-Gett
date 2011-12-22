@@ -14,6 +14,7 @@ use Carp qw(croak);
 use Net::API::Gett::User;
 use Net::API::Gett::Share;
 use Net::API::Gett::File;
+use Net::API::Gett::Request;
 
 BEGIN {
     require LWP::Protocol::https or die "This module requires HTTPS, please install LWP::Protocol::https\n";
@@ -71,113 +72,28 @@ share up to 2 GB of files for free.  They recently implemented a REST API; this 
 binding for the API. See L<http://ge.tt/developers> for full details and how to get an
 API key.
 
+=cut
+
+sub BUILD {
+    my $self = shift;
+    my $args = shift;
+
+    unless ( $self->has_user ) {
+        if ( $args->{refresh_token} ||
+             $args->{access_token}  ||
+             ( $args->{api_key} && $args->{email} && $args->{password} ) ) {
+                $self->user( Net::API::Gett::User->new($args) );
+        }
+    }
+}
+
 =head1 ATTRIBUTES
-
-=over 
-
-=item api_key
-
-Scalar string. Read-only. C<has_api_key> predicate.
-
-=back
-
-=cut
-
-has 'api_key' => ( 
-    is  => 'ro',
-    predicate => 'has_api_key',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ },
-);
-
-=over 
-
-=item email
-
-Scalar string. Read-only. C<has_email> predicate.
-
-=back
-
-=cut
-
-has 'email' => (
-    is  => 'ro',
-    predicate => 'has_email',
-    isa => quote_sub q{ die "$_[0] is not email" unless $_[0] =~ /.+@.+/ },
-);
-
-=over
-
-=item password
-
-Scalar string. Read-only. C<has_password> predicate.
-
-=back
-
-=cut
-
-has 'password' => (
-    is  => 'ro',
-    predicate => 'has_password',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ },
-);
-
-=over
-
-=item access_token
-
-Scalar string. Populated by C<login> call. C<has_access_token()> predicate.
-
-=back 
-
-=cut
-
-has 'access_token' => (
-    is        => 'rw',
-    predicate => 'has_access_token',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
-);
-
-=over
-
-=item access_token_expiration
-
-Scalar integer. Unix epoch seconds until an access token is no longer valid which is 
-currently 24 hours (86400 seconds.) This value is suitable for use in a call to C<localtime()>.
-
-=back
-
-=cut
-
-has 'access_token_expiration' => (
-    is        => 'rw',
-    isa => sub { die "$_[0] is not a number" unless looks_like_number $_[0] }
-);
-
-=over
-
-=item refresh_token
-
-Scalar string. Populated by C<login> call.  Can be used to generate a new valid
-access token without reusing an email/password login method.  C<has_refresh_token()> 
-predicate.
-
-=back
-
-=cut
-
-has 'refresh_token' => (
-    is        => 'rw',
-    predicate => 'has_refresh_token',
-    isa => sub { die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
-);
-
 
 =over
 
 =item user
 
-L<Net::API::Gett::User> object. Populated by C<login> and/or C<my_user_data>. 
-C<has_user()> predicate.
+L<Net::API::Gett::User> object. C<has_user()> predicate.
 
 =back
 
@@ -187,43 +103,25 @@ has 'user' => (
     is => 'rw',
     predicate => 'has_user',
     isa => quote_sub q{ die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
+    lazy => 1,
 );
 
-around BUILDARGS => sub {
-    my $orig  = shift;
-    my $class = shift;
+=over
 
-    my %params = @_;
+=item request
 
-    unless (
-           $params{refresh_token}
-        || $params{access_token}
-        || ( $params{api_key} && $params{email} && $params{password} ) )
-    {
-        die(
-            "api_key, email and password are needed to create ",
-            "Net::API::Gett object. Or you can use refresh_token ",
-            "or access_token rather than api_key, email and password.\n",
-        );
-    }
+L<Net::API::Gett::Request> object.
 
-    return $class->$orig(@_);
-};
+=back
 
-sub _build_user {
-    my $self = shift;
-    my $uref = shift; # hashref https://open.ge.tt/1/doc/rest#users/me
+=cut
 
-    return undef unless ref($uref) eq "HASH";
-
-    return Net::API::Gett::User->new(
-        userid => $uref->{'userid'},
-        fullname => $uref->{'fullname'},
-        email => $uref->{'email'},
-        storage_used => $uref->{'storage'}->{'used'},
-        storage_limit => $uref->{'storage'}->{'limit'},
-    );
-}
+has 'request' => (
+    is => 'rw',
+    isa => sub { die "$_[0] is not Net::API::Gett::Request" unless ref($_[0]) =~ /Request/ },
+    default => sub { Net::API::Gett::Request->new() },
+    lazy => 1,
+);
 
 =head1 METHODS
 
@@ -232,105 +130,6 @@ which is not successful. If you need to handle errors more gracefully, use L<Try
 errors.
 
 =over
-
-=item new()
-
-This method instantiates a new object.  One of the following parameter argument lists is required at
-construction time:
-
-=over
-
-=item * a valid refresh token,
-
-=item * a valid access token, or,
-
-=item * a valid api key, email and password
-
-=back
-
-One of these three is required to pass in the access token parameter to the Gett API when it is required.
-(If an access token is not specified, the API will automatically attempt to log in and get one lazily.)
-
-=back
-
-=head2 Account methods 
-
-=over
-
-=item login()
-
-This method populates the C<access_token>, C<refresh_token> and C<user> attributes.  It usually
-doesn't need to be explicitly called since methods which require an access token will automatically
-(and lazily) attempt to log in to the API and get one.
-
-Returns a perl hash representation of the JSON output for L<https://open.ge.tt/1/users/login>.
-
-=back
-
-=cut
-
-sub login {
-    my $self = shift;
-
-    my %hr;
-    if ( $self->has_api_key && $self->has_email && $self->has_password ) {
-        @hr{'apikey', 'email', 'password'} = (
-            $self->api_key,
-            $self->email,
-            $self->password);
-    }
-    elsif ( $self->has_refresh_token ) {
-        $hr{'refreshtoken'} = $self->refresh_token;
-    }
-    else {
-        return undef;
-    }
-
-    my $response = $self->_send('POST', '/users/login', $self->_encode(\%hr));
-
-    # $response is a hashref
-    # see https://open.ge.tt/1/doc/rest#users/login for response keys
-
-    if ( $response ) {
-        $self->access_token( $response->{'accesstoken'} );
-        $self->access_token_expiration( time + $response->{'expires'} );
-        $self->refresh_token( $response->{'refreshtoken'} );
-        $self->user( $self->_build_user( $response->{'user'} ) );
-        return $response;
-    }
-    else {
-        return undef;
-    }
-}
-
-=over
-
-=item my_user_data()
-
-Retrieves (and/or refreshes) user data held in the C<user> attribute.  This method returns a
-L<Net::API::Gett::User> object.
-
-=back
-
-=cut
-
-sub my_user_data {
-    my $self = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $endpoint = "/users/me?accesstoken=" . $self->access_token;
-
-    my $response = $self->_send('GET', $endpoint);
-
-    if ( $response ) {
-        $self->user( $self->_build_user($response) );
-        return $self->user;
-    }
-    else {
-        return undef;
-    }
-}
 
 =head2 Share functions
 
