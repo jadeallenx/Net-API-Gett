@@ -1,5 +1,15 @@
 Revision history for Net-API-Gett
 
+0.02    2011-12-23
+        Integrate patch from keedi to allow object initialization 
+        with one of:
+            * access token
+            * refresh token, or,
+            * api key, email and password
+
+        Document change
+        Make build dependent on Moo 0.009013 which fixes CPAN test failures.
+
 0.01    2011-12-02
         Initial release
 
