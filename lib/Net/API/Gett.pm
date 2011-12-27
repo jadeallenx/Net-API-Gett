@@ -54,8 +54,8 @@ our $VERSION = '0.02';
 
     say "File has been shared at " . $file_obj->url;
 
-    my $file_contents = $gett->get_file_contents( $file_obj->sharename, 
-            $file_obj->fileid );
+    # Download contents
+    my $file_contents = $file_obj->contents();
 
     open my $fh, ">:encoding(UTF-8)", "/some/path/example-copy.txt" 
         or die $!;
@@ -63,7 +63,8 @@ our $VERSION = '0.02';
     close $fh;
 
     # clean up share and file(s)
-    $gett->destroy_share($file_obj->sharename);
+    my $share = $gett->get_share($file->sharename);
+    $share->destroy();
 
 =head1 ABOUT
 
@@ -82,12 +83,15 @@ sub BUILD {
         if ( $args->{refresh_token} ||
              $args->{access_token}  ||
              ( $args->{api_key} && $args->{email} && $args->{password} ) ) {
-                $self->user( Net::API::Gett::User->new($args) );
+                $self->user( Net::API::Gett::User->new(%{$args}) );
         }
     }
 }
 
 =head1 ATTRIBUTES
+
+If attributes are read‐write mutators, they behave in a Perl‐ish way: 
+pass values to set them, pass no arguments to get current values.
 
 =over
 
@@ -133,10 +137,9 @@ errors.
 
 =head2 Share functions
 
-All of these functions cache L<Net::API::Gett::Share> objects in the C<shares> attribute. 
-The cache is updated whenever calls return successfully from the API so the
-local cache will be in sync with remote information about a given share as long as
-no changes were made to a share outside of this library.
+All of these functions cache L<Net::API::Gett::Share> objects. Retrieve objects from the 
+cache using the C<shares> method.  Use the C<get_share> method to update a cache entry if it
+is stale.
 
 =over
 
@@ -145,7 +148,7 @@ no changes were made to a share outside of this library.
 Retrieves B<all> share information for the given user.  Takes optional scalar integers 
 C<offset> and C<limit> parameters, respectively. 
 
-Returns a list of L<Net::API::Gett::Share> objects. 
+Returns an unordered list of L<Net::API::Gett::Share> objects. 
 
 =back
 
@@ -290,27 +293,19 @@ This method uploads a file to Gett. The following key/value pairs are valid:
 
 =over
 
-=item *
-
-sharename (optional) 
+=item * sharename (optional) 
     
 If not specified, a new share will be automatically created.
 
-=item *
-
-title (optional) 
+=item * title (optional) 
     
 If specified, this value is used when creating a new share to hold the file.
 
-=item * 
-
-filename (required) 
+=item * filename (required) 
     
 What to call the uploaded file when it's inside of the Gett service.
 
-=item *
-
-content (optional) 
+=item * content (optional) 
 
 A representation of the file's contents.  This can be one of:
 
@@ -328,9 +323,7 @@ A representation of the file's contents.  This can be one of:
 
 If not specified, the filename parameter is used as a pathname.
 
-=item *
-
-encoding
+=item * encoding
 
 An encoding scheme for the file content. By default it uses C<:raw>
 
@@ -355,13 +348,13 @@ sub upload_file {
         $sharename = $share->sharename;
     }
 
-    $self->login unless $self->has_access_token;
+    $self->user->login unless $self->user->has_access_token;
 
-    my $endpoint = "/files/$sharename/create?accesstoken=".$self->access_token;
+    my $endpoint = "/files/$sharename/create?accesstoken=".$self->user->access_token;
     
     my $filename = $opts->{'filename'};
 
-    my $response = $self->_send('POST', $endpoint, $self->_encode( { filename => $filename } ));
+    my $response = $self->request->post($endpoint, { filename => $filename });
 
     if ( not exists $opts->{'contents'} ) {
         $opts->{'contents'} = $filename;
@@ -372,7 +365,7 @@ sub upload_file {
         if ( $file->readystate eq "remote" ) {
             my $put_upload_url = $file->put_upload_url;
             croak "Didn't get put upload URL from $endpoint" unless $put_upload_url;
-            if ( $self->send_file($put_upload_url, $opts->{'contents'}, $opts->{'encoding'}) ) {
+            if ( $file->send_file($put_upload_url, $opts->{'contents'}, $opts->{'encoding'}) ) {
                 return $file;
             }
             else {
@@ -399,10 +392,11 @@ sub _build_share {
     );
     foreach my $file_href ( @{ $share_href->{'files'} } ) {
         next unless $file_href;
-        $share->add_file(
-            $self->_build_file($file_href)
-        );
+        my $file = $self->_build_file($file_href);
+        $share->add_file($file);
     }
+    $share->user($self->user) if $self->has_user;
+
     return $share;
 }
 
@@ -430,6 +424,7 @@ sub _build_file {
     }
 
     my $file = Net::API::Gett::File->new( %attrs );
+    $file->user($self->user) if $self->has_user;
 
     return $file;
 }
@@ -439,6 +434,8 @@ sub _build_file {
 =item add_share()
 
 This method populates/updates the L<Net::API::Gett:Share> object local cache.
+
+It returns undef if the passed value isn't a L<Net::API::Gett::Share> object.
 
 =back
 

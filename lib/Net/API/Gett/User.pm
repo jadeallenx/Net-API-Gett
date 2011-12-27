@@ -3,6 +3,7 @@ package Net::API::Gett::User;
 use Moo;
 use Sub::Quote;
 use Carp qw(croak);
+use Scalar::Util qw(looks_like_number);
 
 use Net::API::Gett::Request;
 

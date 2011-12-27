@@ -78,57 +78,57 @@ attribute is only populated during certain times.)
 
 has 'filename' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
 );
 
 has 'fileid' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
 );
 
 has 'downloads' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
 );
 
 has 'readystate' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
 );
 
 has 'url' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
 );
 
 has 'download' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
 );
 
 has 'size' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
 );
 
 has 'created' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
 );
 
 has 'sharename' => (
-    is => 'ro',
-    isa => 'Str',
+    is => 'rw',
+    isa => Str,
 );
 
 has 'put_upload_url' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
 );
 
 has 'post_upload_url' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
 );
 
 =over
@@ -281,9 +281,9 @@ sub destroy {
         
 sub _file_contents {
     my $self = shift;
-    my $endpoint = shift;
+    my $endpoint = $self->request->base_url . shift;
 
-    my $response = $self->request->ua(GET $endpoint);
+    my $response = $self->request->ua->get($endpoint);
 
     if ( $response->is_success ) {
         return $response->content();
