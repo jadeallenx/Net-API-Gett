@@ -101,9 +101,9 @@ L<Net::API::Gett::User> object. C<has_user()> predicate.
 
 has 'user' => (
     is => 'rw',
-    predicate => 'has_user',
-    isa => quote_sub q{ die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
     lazy => 1,
+    predicate => 'has_user',
+    isa => sub { die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
 );
 
 =over
@@ -153,12 +153,14 @@ Returns a list of L<Net::API::Gett::Share> objects.
 
 sub get_shares {
     my $self = shift;
+    croak "Can't call get_shares() without Net::API::Gett::User object" unless $self->has_user;
+
     my $offset = shift;
     my $limit = shift;
 
-    $self->login unless $self->has_access_token;
+    $self->user->login unless $self->user->has_access_token;
 
-    my $endpoint = "/shares?accesstoken=" . $self->access_token;
+    my $endpoint = "/shares?accesstoken=" . $self->user->access_token;
 
     if ( defined $offset && looks_like_number $offset ) {
         $endpoint .= "&skip=$offset";
@@ -168,7 +170,7 @@ sub get_shares {
         $endpoint .= "&limit=$limit";
     }
 
-    my $response = $self->_send('GET', $endpoint);
+    my $response = $self->request->get($endpoint);
 
     if ( $response ) {
         foreach my $share_href ( @{ $response } ) {
@@ -189,7 +191,7 @@ sub get_shares {
 =item get_share()
 
 Retrieves (and/or refreshes cached) information about a specific single share. 
-Requires a C<sharename> parameter. 
+Requires a C<sharename> parameter. Does not require an access token to call.
 
 Returns a L<Net::API::Gett::Share> object.
 
@@ -203,7 +205,7 @@ sub get_share {
 
     return undef unless $sharename =~ /\w+/;
 
-    my $response = $self->_send('GET', "/shares/$sharename");
+    my $response = $self->request->get("/shares/$sharename");
 
     if ( $response ) {
         my $share = $self->_build_share($response);
@@ -230,85 +232,22 @@ Returns the new share as a L<Net::API::Gett::Share> object.
 
 sub create_share {
     my $self = shift;
+    croak "Can't call create_share() without Net::API::Gett::User object" unless $self->has_user;
+
     my $title = shift;
 
-    $self->login unless $self->has_access_token;
+    $self->user->login unless $self->user->has_access_token;
 
-    my @args = ('POST', "/shares/create?accesstoken=".$self->access_token);
+    my @args = ("/shares/create?accesstoken=".$self->user->access_token);
     if ( $title ) {
-        push @args, $self->_encode({ title => $title });
+        push @args, { title => $title };
     }
-    my $response = $self->_send(@args);
+    my $response = $self->request->post(@args);
 
     if ( $response ) {
         my $share = $self->_build_share($response);
         $self->add_share($share);
         return $share;
-    }
-    else {
-        return undef;
-    }
-}
-
-=over
-
-=item update_share()
-
-This method updates share attributes.  At present, only the share title can be changed (or deleted), 
-so pass in a string to set a new title for a specific share.
-
-Calling this method with an empty parameter list or explicitly passing C<undef> 
-will B<delete> any title currently set on the share.
-
-Returns a L<Net::API::Gett:Share> object with updated values.
-
-=back
-
-=cut
-        
-sub update_share {
-    my $self = shift;
-    my $name = shift;
-    my $title = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $response = $self->_send('POST', "/shares/$name/update?accesstoken=".$self->access_token, 
-            $self->_encode( { title => $title } )
-    );
-
-    if ( $response ) {
-        my $share = $self->_build_share($response);
-        $self->add_share($share);
-        return $share;
-    }
-    else {
-        return undef;
-    }
-}
-
-=over
-
-=item destroy_share()
-
-This method destroys the specified share and all of that share's files.  Returns a true boolean
-on success.
-
-=back
-
-=cut
-
-sub destroy_share {
-    my $self = shift;
-    my $name = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $response = $self->_send('POST', "/shares/$name/destroy?accesstoken=".$self->access_token);
-
-    if ( $response ) {
-        delete $self->{'shares'}->{$name};
-        return 1;
     }
     else {
         return undef;
@@ -322,6 +261,7 @@ sub destroy_share {
 =item get_file()
 
 Returns a L<Net::API::Gett::File> object given a C<sharename> and a C<fileid>.
+Does not require an access token to call.
 
 =back
 
@@ -332,7 +272,7 @@ sub get_file {
     my $sharename = shift;
     my $fileid = shift;
 
-    my $response = $self->_send('GET', "/files/$sharename/$fileid");
+    my $response = $self->request->get("/files/$sharename/$fileid");
 
     if ( $response ) {
         return $self->_build_file($response);
@@ -446,180 +386,6 @@ sub upload_file {
     else {
         return undef;
     }
-}
-
-=over
-
-=item send_file()
-
-This method actually uploads the file to the Gett service. This method is normally invoked by the
-C<upload_file()> method, but it's a public method which might be useful in combination with 
-C<get_new_upload_url()>. It takes the following parameters:
-
-=over
-
-=item * 
-
-a PUT based Gett upload url
-
-=item * 
-
-a scalar representing the file contents which can be one of: a buffer, an L<IO::Handle> object, a FILEGLOB, or a 
-file pathname.
-
-=item *
-
-an encoding scheme. By default, it uses C<:raw> (see C<perldoc -f binmode> for more information.)
-
-=back
-
-Returns a true value on success.
-
-=back
-
-=cut
-
-sub send_file {
-    my $self = shift;
-    my $url = shift;
-    my $contents = shift;
-    my $encoding = shift || ":raw";
-
-    my $data = read_file($contents, { binmode => $encoding });
-
-    return 0 unless $data;
-
-    my $response = $self->ua->request(PUT $url, Content => $data);
-
-}
-
-=over
-
-=item get_new_upload_url()
-
-This method returns a scalar PUT upload URL for the specified sharename/fileid parameters. 
-Potentially useful in combination with C<send_file()>.
-
-=back
-
-=cut
-
-sub get_new_upload_url {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $endpoint = "/files/$sharename/$fileid/upload?accesstoken=".$self->access_token;
-
-    my $response = $self->_send('GET', $endpoint);
-
-    if ( $response && exists $response->{'puturl'} ) {
-        return $response->{'puturl'};
-    }
-    else {
-        croak "Could not get a PUT url from $endpoint";
-    }
-}
-
-=over
-
-=item destroy_file()
-
-This method destroys a file specified by the given sharename/fileid parameters. Returns a true value.
-
-=back
-
-=cut
-
-sub destroy_file {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $endpoint = "/files/$sharename/$fileid/destroy?accesstoken=".$self->access_token;
-
-    my $response = $self->_send('POST', $endpoint);
-
-    if ( $response ) {
-        return 1;
-    }
-    else {
-        return undef;
-    }
-}
-        
-sub _file_contents {
-    my $self = shift;
-    my $endpoint = $self->base_url . shift;
-
-    my $response = $self->ua->request(GET $endpoint);
-
-    if ( $response->is_success ) {
-        return $response->content();
-    }
-    else {
-        croak "$endpoint said " . $response->status_line;
-    }
-}
-
-=over
-
-=item get_file_contents()
-
-This method retrieves the contents of a file in the Gett service given by the sharename/fileid parameters.
-You are responsible for outputting the file (if desired) with any appropriate encoding.
-
-=back
-
-=cut
-
-sub get_file_contents {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    return $self->_file_contents("/files/$sharename/$fileid/blob");
-}
-
-=over
-
-=item get_thumbnail()
-
-This method returns a thumbnail if the file in Gett is an image. Requires a
-sharename and fileid.
-
-=back
-
-=cut
-
-sub get_thumbnail {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    return $self->_file_contents("/files/$sharename/$fileid/blob/thumb");
-}
-
-=over
-
-=item get_scaled_contents()
-
-This method returns scaled image data (assuming the file in Gett is an image.) Requires
-sharename, fileid, width and height paramters, respectively.
-
-=back
-
-=cut
-
-sub get_scaled_contents {
-    my $self = shift;
-    my ( $sharename, $fileid, $width, $height ) = @_;
-
-    return $self->_file_contents("/files/$sharename/$fileid/blob/scale?size=$width"."x$height");
 }
 
 sub _build_share {
