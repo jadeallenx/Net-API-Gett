@@ -3,6 +3,9 @@ package Net::API::Gett::User;
 use Moo;
 use Sub::Quote;
 use Carp qw(croak);
+use Scalar::Util qw(looks_like_number);
+
+use Net::API::Gett::Request;
 
 our $VERSION = '0.02';
 
@@ -10,10 +13,131 @@ our $VERSION = '0.02';
 
 Net::API::Gett::User - Gett User object
 
+=head1 PURPOSE
+
+This class encapsulates Gett service user functions. You normally shouldn't instanstiate 
+this class on its own as the library will create and return this object when appropriate.
+
 =head1 ATTRIBUTES
 
-These are read only attributes. You normally shouldn't instanstiate this class on its own as
-the library will create and return this object when appropriate.
+Here are the attributes of this class.  If they are read-write mutators, they behave in 
+a Perl-ish way: pass values to set them, pass no arguments to get current values.
+
+=over 
+
+=item api_key
+
+Scalar string. Read-only. C<has_api_key> predicate.
+
+=back
+
+=cut
+
+has 'api_key' => ( 
+    is  => 'ro',
+    predicate => 'has_api_key',
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ },
+);
+
+=over 
+
+=item email
+
+Scalar string. Read-only. C<has_email> predicate.
+
+=back
+
+=cut
+
+has 'email' => (
+    is  => 'ro',
+    predicate => 'has_email',
+    isa => sub { die "$_[0] is not email" unless $_[0] =~ /.+@.+/ },
+);
+
+=over
+
+=item password
+
+Scalar string. Read-only. C<has_password> predicate.
+
+=back
+
+=cut
+
+has 'password' => (
+    is  => 'ro',
+    predicate => 'has_password',
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ },
+);
+
+=over
+
+=item access_token
+
+Scalar string. Populated by C<login> call. C<has_access_token()> predicate.
+
+=back 
+
+=cut
+
+has 'access_token' => (
+    is        => 'rw',
+    predicate => 'has_access_token',
+    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
+);
+
+=over
+
+=item access_token_expiration
+
+Scalar integer. Unix epoch seconds until an access token is no longer valid which is 
+currently 24 hours (86400 seconds) from token acquisition. 
+This value is suitable for use in a call to C<localtime()>.
+
+=back
+
+=cut
+
+has 'access_token_expiration' => (
+    is        => 'rw',
+    isa => sub { die "$_[0] is not a number" unless looks_like_number $_[0] }
+);
+
+=over
+
+=item refresh_token
+
+Scalar string. Populated by C<login> call.  Can be used to generate a new valid
+access token without reusing an email/password login method.  C<has_refresh_token()> 
+predicate.
+
+=back
+
+=cut
+
+has 'refresh_token' => (
+    is        => 'rw',
+    predicate => 'has_refresh_token',
+    isa => sub { die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
+);
+
+=over
+
+=item request
+
+This is a L<Net::API::Gett::Request> object. Defaults to a new instance of that class.
+
+=back
+
+=cut
+
+has 'request' => (
+    is => 'rw',
+    isa => sub { die "$_[0] is not Net::API::Gett::Request" unless ref($_[0]) =~ /Request/ },
+    default => sub { Net::API::Gett::Request->new() },
+    lazy => 1,
+);
 
 =over
 
@@ -39,32 +163,143 @@ Scalar integer. In bytes.
 
 =back
 
+
+=cut
+
+has 'userid' => (
+    is => 'rw',
+    isa => sub { croak "$_[0] isn't alphanumeric\n" unless $_[0] =~ /[\w-]+/ },
+);
+
+has 'fullname' => (
+    is => 'rw',
+);
+
+has 'storage_used' => (
+    is => 'rw',
+);
+
+has 'storage_limit' => (
+    is => 'rw',
+);
+
+=head2 Account methods 
+
+=over
+
+=item login()
+
+This method populates the C<access_token>, C<refresh_token> and C<user> attributes.  It usually
+doesn't need to be explicitly called since methods which require an access token will automatically
+(and lazily) attempt to log in to the API and get one.
+
+Returns a perl hash representation of the JSON output for L<https://open.ge.tt/1/users/login>.
+
+=back
+
+=cut
+
+around BUILDARGS => sub {
+    my $orig  = shift;
+    my $class = shift;
+
+    my %params = @_;
+
+    unless (
+           $params{refresh_token}
+        || $params{access_token}
+        || ( $params{api_key} && $params{email} && $params{password} ) )
+    {
+        die(
+            "api_key, email and password are needed to create ",
+            "Net::API::Gett::User object. Or you can use refresh_token ",
+            "or access_token rather than api_key, email and password.\n",
+        );
+    }
+
+    return $class->$orig(@_);
+};
+
+sub login {
+    my $self = shift;
+
+    my %hr;
+    if ( $self->has_refresh_token ) {
+        $hr{'refreshtoken'} = $self->refresh_token;
+    }
+    elsif ( $self->has_api_key && $self->has_email && $self->has_password ) {
+        @hr{'apikey', 'email', 'password'} = (
+            $self->api_key,
+            $self->email,
+            $self->password);
+    }
+    else {
+        return undef;
+    }
+
+    my $response = $self->request->post('/users/login', \%hr);
+
+    # $response is a hashref
+    # see https://open.ge.tt/1/doc/rest#users/login for response keys
+
+    if ( $response ) {
+        $self->access_token( $response->{'accesstoken'} );
+        $self->access_token_expiration( time + $response->{'expires'} );
+        $self->refresh_token( $response->{'refreshtoken'} );
+        $self->_set_attrs( $response->{'user'} );
+        return $self;
+    }
+    else {
+        croak("No response from user->login");
+    }
+}
+
+=over
+
+=item refresh()
+
+Refreshes user data.
+
+=back
+
+=cut
+
+sub refresh {
+    my $self = shift;
+
+    $self->login unless $self->has_access_token;
+
+    my $endpoint = "/users/me?accesstoken=" . $self->access_token;
+
+    my $response = $self->request->get($endpoint);
+
+    if ( $response ) {
+        $self->_set_attrs($response);
+        return $self;
+    }
+    else {
+        croak("No response from user->refresh");
+    }
+}
+
+sub _set_attrs {
+    my $self = shift;
+    my $uref = shift; # hashref https://open.ge.tt/1/doc/rest#users/me
+
+    return undef unless ref($uref) eq "HASH";
+
+    $self->userid($uref->{'userid'});
+    $self->fullname($uref->{'fullname'});
+    $self->email($uref->{'email'});
+    $self->storage_used($uref->{'storage'}->{'used'});
+    $self->storage_limit($uref->{'storage'}->{'limit'}),
+}
+
 =head1 SEE ALSO
 
 L<Net::API::Gett>
 
 =cut
-
-has 'userid' => (
-    is => 'ro',
-    isa => sub { croak "$_[0] isn't alphanumeric\n" unless $_[0] =~ /[\w-]+/ },
-);
-
-has 'fullname' => (
-    is => 'ro',
-);
-
-has 'email' => (
-    is => 'ro',
-);
-
-has 'storage_used' => (
-    is => 'ro',
-);
-
-has 'storage_limit' => (
-    is => 'ro',
-);
 
 1;
 

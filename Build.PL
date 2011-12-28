@@ -18,6 +18,8 @@ my $builder = Module::Build->new(
         'LWP'         => 0,
         'JSON'        => 0,
         'File::Slurp' => 0,
+        'Array::Iterator' => 0,
+        'MooX::Types::MooseLike' => 0,
     },
     add_to_cleanup      => [ 'Net-API-Gett-*' ],
     create_makefile_pl => 'traditional',

@@ -7,9 +7,6 @@ use v5.10;
 
 use Moo;
 use Sub::Quote;
-use JSON;
-use LWP::UserAgent;
-use HTTP::Request::Common;
 use Scalar::Util qw(looks_like_number);
 use File::Slurp qw(read_file);
 use Carp qw(croak);
@@ -17,6 +14,7 @@ use Carp qw(croak);
 use Net::API::Gett::User;
 use Net::API::Gett::Share;
 use Net::API::Gett::File;
+use Net::API::Gett::Request;
 
 BEGIN {
     require LWP::Protocol::https or die "This module requires HTTPS, please install LWP::Protocol::https\n";
@@ -56,8 +54,8 @@ our $VERSION = '0.02';
 
     say "File has been shared at " . $file_obj->url;
 
-    my $file_contents = $gett->get_file_contents( $file_obj->sharename, 
-            $file_obj->fileid );
+    # Download contents
+    my $file_contents = $file_obj->contents();
 
     open my $fh, ">:encoding(UTF-8)", "/some/path/example-copy.txt" 
         or die $!;
@@ -65,7 +63,8 @@ our $VERSION = '0.02';
     close $fh;
 
     # clean up share and file(s)
-    $gett->destroy_share($file_obj->sharename);
+    my $share = $gett->get_share($file->sharename);
+    $share->destroy();
 
 =head1 ABOUT
 
@@ -74,148 +73,31 @@ share up to 2 GB of files for free.  They recently implemented a REST API; this 
 binding for the API. See L<http://ge.tt/developers> for full details and how to get an
 API key.
 
+=cut
+
+sub BUILD {
+    my $self = shift;
+    my $args = shift;
+
+    unless ( $self->has_user ) {
+        if ( $args->{refresh_token} ||
+             $args->{access_token}  ||
+             ( $args->{api_key} && $args->{email} && $args->{password} ) ) {
+                $self->user( Net::API::Gett::User->new(%{$args}) );
+        }
+    }
+}
+
 =head1 ATTRIBUTES
 
-=over 
-
-=item api_key
-
-Scalar string. Read-only. C<has_api_key> predicate.
-
-=back
-
-=cut
-
-has 'api_key' => ( 
-    is  => 'ro',
-    predicate => 'has_api_key',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ },
-);
-
-=over 
-
-=item email
-
-Scalar string. Read-only. C<has_email> predicate.
-
-=back
-
-=cut
-
-has 'email' => (
-    is  => 'ro',
-    predicate => 'has_email',
-    isa => quote_sub q{ die "$_[0] is not email" unless $_[0] =~ /.+@.+/ },
-);
-
-=over
-
-=item password
-
-Scalar string. Read-only. C<has_password> predicate.
-
-=back
-
-=cut
-
-has 'password' => (
-    is  => 'ro',
-    predicate => 'has_password',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ },
-);
-
-=over
-
-=item access_token
-
-Scalar string. Populated by C<login> call. C<has_access_token()> predicate.
-
-=back 
-
-=cut
-
-has 'access_token' => (
-    is        => 'rw',
-    predicate => 'has_access_token',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
-);
-
-=over
-
-=item access_token_expiration
-
-Scalar integer. Unix epoch seconds until an access token is no longer valid which is 
-currently 24 hours (86400 seconds.) This value is suitable for use in a call to C<localtime()>.
-
-=back
-
-=cut
-
-has 'access_token_expiration' => (
-    is        => 'rw',
-    isa => sub { die "$_[0] is not a number" unless looks_like_number $_[0] }
-);
-
-=over
-
-=item refresh_token
-
-Scalar string. Populated by C<login> call.  Can be used to generate a new valid
-access token without reusing an email/password login method.  C<has_refresh_token()> 
-predicate.
-
-=back
-
-=cut
-
-has 'refresh_token' => (
-    is        => 'rw',
-    predicate => 'has_refresh_token',
-    isa => sub { die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
-);
-
-=over
-
-=item base_url
-
-Scalar string. Read-only. Populated at object construction. Default value: L<https://open.ge.tt/1>. 
-
-=back
-
-=cut
-
-has 'base_url' => (
-    is        => 'ro',
-    default   => sub { 'https://open.ge.tt/1' },
-);
-
-=over
-
-=item ua
-
-L<LWP::UserAgent> object. Read only. Populated at object construction. Uses a default L<LWP::UserAgent>
-if not supplied.
-
-=back
-
-=cut
-
-has 'ua' => (
-    is => 'ro',
-    default => sub { 
-        my $ua = LWP::UserAgent->new(); 
-        $ua->agent("Net-API-Gett/$VERSION/(Perl)"); 
-        return $ua;
-    },
-    isa => sub { die "$_[0] is not LWP::UserAgent" unless ref($_[0])=~/UserAgent/ },
-);
+If attributes are read‐write mutators, they behave in a Perl‐ish way: 
+pass values to set them, pass no arguments to get current values.
 
 =over
 
 =item user
 
-L<Net::API::Gett::User> object. Populated by C<login> and/or C<my_user_data>. 
-C<has_user()> predicate.
+L<Net::API::Gett::User> object. C<has_user()> predicate.
 
 =back
 
@@ -223,88 +105,27 @@ C<has_user()> predicate.
 
 has 'user' => (
     is => 'rw',
+    lazy => 1,
     predicate => 'has_user',
-    isa => quote_sub q{ die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
+    isa => sub { die "$_[0] is not Net::API::Gett::User" unless ref($_[0]) =~ /User/ },
 );
 
-around BUILDARGS => sub {
-    my $orig  = shift;
-    my $class = shift;
+=over
 
-    my %params = @_;
+=item request
 
-    unless (
-           $params{refresh_token}
-        || $params{access_token}
-        || ( $params{api_key} && $params{email} && $params{password} ) )
-    {
-        die(
-            "api_key, email and password are needed to create ",
-            "Net::API::Gett object. Or you can use refresh_token ",
-            "or access_token rather than api_key, email and password.\n",
-        );
-    }
+L<Net::API::Gett::Request> object.
 
-    return $class->$orig(@_);
-};
+=back
 
-sub _encode {
-    my $self = shift;
-    my $hr = shift;
+=cut
 
-    return encode_json($hr);
-}
-
-sub _decode {
-    my $self = shift;
-    my $json = shift;
-
-    return decode_json($json);
-}
-
-sub _send {
-    my $self = shift;
-    my $method = uc shift;
-    my $endpoint = shift;
-    my $data = shift;
-
-    my $url = $self->base_url . $endpoint;
-
-    my $req;
-    if ( $method eq "POST" ) {
-        $req = POST $url, Content => $data;
-    }
-    elsif ( $method eq "GET" ) {
-        $req = GET $url;
-    }
-    else {
-        croak "$method is not supported.";
-    }
-
-    my $response = $self->ua->request($req);
-
-    if ( $response->is_success ) {
-        return $self->_decode($response->content());
-    }
-    else {
-        croak "$method $url said " . $response->status_line;
-    }
-}
-
-sub _build_user {
-    my $self = shift;
-    my $uref = shift; # hashref https://open.ge.tt/1/doc/rest#users/me
-
-    return undef unless ref($uref) eq "HASH";
-
-    return Net::API::Gett::User->new(
-        userid => $uref->{'userid'},
-        fullname => $uref->{'fullname'},
-        email => $uref->{'email'},
-        storage_used => $uref->{'storage'}->{'used'},
-        storage_limit => $uref->{'storage'}->{'limit'},
-    );
-}
+has 'request' => (
+    is => 'rw',
+    isa => sub { die "$_[0] is not Net::API::Gett::Request" unless ref($_[0]) =~ /Request/ },
+    default => sub { Net::API::Gett::Request->new() },
+    lazy => 1,
+);
 
 =head1 METHODS
 
@@ -314,111 +135,11 @@ errors.
 
 =over
 
-=item new()
-
-This method instantiates a new object.  One of the following parameter argument lists is required at
-construction time:
-
-=over
-
-=item * a valid refresh token,
-
-=item * a valid access token, or,
-
-=item * a valid api key, email and password
-
-=back
-
-One of these three is required to pass in the access token parameter to the Gett API when it is required.
-(If an access token is not specified, the API will automatically attempt to log in and get one lazily.)
-
-=back
-
-=head2 Account methods 
-
-=over
-
-=item login()
-
-This method populates the C<access_token>, C<refresh_token> and C<user> attributes.  It usually
-doesn't need to be explicitly called since methods which require an access token will automatically
-(and lazily) attempt to log in to the API and get one.
-
-Returns a perl hash representation of the JSON output for L<https://open.ge.tt/1/users/login>.
-
-=back
-
-=cut
-
-sub login {
-    my $self = shift;
-
-    my %hr;
-    if ( $self->has_api_key && $self->has_email && $self->has_password ) {
-        @hr{'apikey', 'email', 'password'} = (
-            $self->api_key,
-            $self->email,
-            $self->password);
-    }
-    elsif ( $self->has_refresh_token ) {
-        $hr{'refreshtoken'} = $self->refresh_token;
-    }
-    else {
-        return undef;
-    }
-
-    my $response = $self->_send('POST', '/users/login', $self->_encode(\%hr));
-
-    # $response is a hashref
-    # see https://open.ge.tt/1/doc/rest#users/login for response keys
-
-    if ( $response ) {
-        $self->access_token( $response->{'accesstoken'} );
-        $self->access_token_expiration( time + $response->{'expires'} );
-        $self->refresh_token( $response->{'refreshtoken'} );
-        $self->user( $self->_build_user( $response->{'user'} ) );
-        return $response;
-    }
-    else {
-        return undef;
-    }
-}
-
-=over
-
-=item my_user_data()
-
-Retrieves (and/or refreshes) user data held in the C<user> attribute.  This method returns a
-L<Net::API::Gett::User> object.
-
-=back
-
-=cut
-
-sub my_user_data {
-    my $self = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $endpoint = "/users/me?accesstoken=" . $self->access_token;
-
-    my $response = $self->_send('GET', $endpoint);
-
-    if ( $response ) {
-        $self->user( $self->_build_user($response) );
-        return $self->user;
-    }
-    else {
-        return undef;
-    }
-}
-
 =head2 Share functions
 
-All of these functions cache L<Net::API::Gett::Share> objects in the C<shares> attribute. 
-The cache is updated whenever calls return successfully from the API so the
-local cache will be in sync with remote information about a given share as long as
-no changes were made to a share outside of this library.
+All of these functions cache L<Net::API::Gett::Share> objects. Retrieve objects from the 
+cache using the C<shares> method.  Use the C<get_share> method to update a cache entry if it
+is stale.
 
 =over
 
@@ -427,7 +148,7 @@ no changes were made to a share outside of this library.
 Retrieves B<all> share information for the given user.  Takes optional scalar integers 
 C<offset> and C<limit> parameters, respectively. 
 
-Returns a list of L<Net::API::Gett::Share> objects. 
+Returns an unordered list of L<Net::API::Gett::Share> objects. 
 
 =back
 
@@ -435,12 +156,14 @@ Returns a list of L<Net::API::Gett::Share> objects.
 
 sub get_shares {
     my $self = shift;
+    croak "Can't call get_shares() without Net::API::Gett::User object" unless $self->has_user;
+
     my $offset = shift;
     my $limit = shift;
 
-    $self->login unless $self->has_access_token;
+    $self->user->login unless $self->user->has_access_token;
 
-    my $endpoint = "/shares?accesstoken=" . $self->access_token;
+    my $endpoint = "/shares?accesstoken=" . $self->user->access_token;
 
     if ( defined $offset && looks_like_number $offset ) {
         $endpoint .= "&skip=$offset";
@@ -450,7 +173,7 @@ sub get_shares {
         $endpoint .= "&limit=$limit";
     }
 
-    my $response = $self->_send('GET', $endpoint);
+    my $response = $self->request->get($endpoint);
 
     if ( $response ) {
         foreach my $share_href ( @{ $response } ) {
@@ -471,7 +194,7 @@ sub get_shares {
 =item get_share()
 
 Retrieves (and/or refreshes cached) information about a specific single share. 
-Requires a C<sharename> parameter. 
+Requires a C<sharename> parameter. Does not require an access token to call.
 
 Returns a L<Net::API::Gett::Share> object.
 
@@ -485,7 +208,7 @@ sub get_share {
 
     return undef unless $sharename =~ /\w+/;
 
-    my $response = $self->_send('GET', "/shares/$sharename");
+    my $response = $self->request->get("/shares/$sharename");
 
     if ( $response ) {
         my $share = $self->_build_share($response);
@@ -512,85 +235,22 @@ Returns the new share as a L<Net::API::Gett::Share> object.
 
 sub create_share {
     my $self = shift;
+    croak "Can't call create_share() without Net::API::Gett::User object" unless $self->has_user;
+
     my $title = shift;
 
-    $self->login unless $self->has_access_token;
+    $self->user->login unless $self->user->has_access_token;
 
-    my @args = ('POST', "/shares/create?accesstoken=".$self->access_token);
+    my @args = ("/shares/create?accesstoken=".$self->user->access_token);
     if ( $title ) {
-        push @args, $self->_encode({ title => $title });
+        push @args, { title => $title };
     }
-    my $response = $self->_send(@args);
+    my $response = $self->request->post(@args);
 
     if ( $response ) {
         my $share = $self->_build_share($response);
         $self->add_share($share);
         return $share;
-    }
-    else {
-        return undef;
-    }
-}
-
-=over
-
-=item update_share()
-
-This method updates share attributes.  At present, only the share title can be changed (or deleted), 
-so pass in a string to set a new title for a specific share.
-
-Calling this method with an empty parameter list or explicitly passing C<undef> 
-will B<delete> any title currently set on the share.
-
-Returns a L<Net::API::Gett:Share> object with updated values.
-
-=back
-
-=cut
-        
-sub update_share {
-    my $self = shift;
-    my $name = shift;
-    my $title = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $response = $self->_send('POST', "/shares/$name/update?accesstoken=".$self->access_token, 
-            $self->_encode( { title => $title } )
-    );
-
-    if ( $response ) {
-        my $share = $self->_build_share($response);
-        $self->add_share($share);
-        return $share;
-    }
-    else {
-        return undef;
-    }
-}
-
-=over
-
-=item destroy_share()
-
-This method destroys the specified share and all of that share's files.  Returns a true boolean
-on success.
-
-=back
-
-=cut
-
-sub destroy_share {
-    my $self = shift;
-    my $name = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $response = $self->_send('POST', "/shares/$name/destroy?accesstoken=".$self->access_token);
-
-    if ( $response ) {
-        delete $self->{'shares'}->{$name};
-        return 1;
     }
     else {
         return undef;
@@ -604,6 +264,7 @@ sub destroy_share {
 =item get_file()
 
 Returns a L<Net::API::Gett::File> object given a C<sharename> and a C<fileid>.
+Does not require an access token to call.
 
 =back
 
@@ -614,7 +275,7 @@ sub get_file {
     my $sharename = shift;
     my $fileid = shift;
 
-    my $response = $self->_send('GET', "/files/$sharename/$fileid");
+    my $response = $self->request->get("/files/$sharename/$fileid");
 
     if ( $response ) {
         return $self->_build_file($response);
@@ -632,27 +293,19 @@ This method uploads a file to Gett. The following key/value pairs are valid:
 
 =over
 
-=item *
-
-sharename (optional) 
+=item * sharename (optional) 
     
 If not specified, a new share will be automatically created.
 
-=item *
-
-title (optional) 
+=item * title (optional) 
     
 If specified, this value is used when creating a new share to hold the file.
 
-=item * 
-
-filename (required) 
+=item * filename (required) 
     
 What to call the uploaded file when it's inside of the Gett service.
 
-=item *
-
-content (optional) 
+=item * content (optional) 
 
 A representation of the file's contents.  This can be one of:
 
@@ -670,9 +323,7 @@ A representation of the file's contents.  This can be one of:
 
 If not specified, the filename parameter is used as a pathname.
 
-=item *
-
-encoding
+=item * encoding
 
 An encoding scheme for the file content. By default it uses C<:raw>
 
@@ -697,13 +348,13 @@ sub upload_file {
         $sharename = $share->sharename;
     }
 
-    $self->login unless $self->has_access_token;
+    $self->user->login unless $self->user->has_access_token;
 
-    my $endpoint = "/files/$sharename/create?accesstoken=".$self->access_token;
+    my $endpoint = "/files/$sharename/create?accesstoken=".$self->user->access_token;
     
     my $filename = $opts->{'filename'};
 
-    my $response = $self->_send('POST', $endpoint, $self->_encode( { filename => $filename } ));
+    my $response = $self->request->post($endpoint, { filename => $filename });
 
     if ( not exists $opts->{'contents'} ) {
         $opts->{'contents'} = $filename;
@@ -714,7 +365,7 @@ sub upload_file {
         if ( $file->readystate eq "remote" ) {
             my $put_upload_url = $file->put_upload_url;
             croak "Didn't get put upload URL from $endpoint" unless $put_upload_url;
-            if ( $self->send_file($put_upload_url, $opts->{'contents'}, $opts->{'encoding'}) ) {
+            if ( $file->send_file($put_upload_url, $opts->{'contents'}, $opts->{'encoding'}) ) {
                 return $file;
             }
             else {
@@ -730,186 +381,6 @@ sub upload_file {
     }
 }
 
-=over
-
-=item send_file()
-
-This method actually uploads the file to the Gett service. This method is normally invoked by the
-C<upload_file()> method, but it's a public method which might be useful in combination with 
-C<get_new_upload_url()>. It takes the following parameters:
-
-=over
-
-=item * 
-
-a PUT based Gett upload url
-
-=item * 
-
-a scalar representing the file contents which can be one of: a buffer, an L<IO::Handle> object, a FILEGLOB, or a 
-file pathname.
-
-=item *
-
-an encoding scheme. By default, it uses C<:raw> (see C<perldoc -f binmode> for more information.)
-
-=back
-
-Returns a true value on success.
-
-=back
-
-=cut
-
-sub send_file {
-    my $self = shift;
-    my $url = shift;
-    my $contents = shift;
-    my $encoding = shift || ":raw";
-
-    my $data = read_file($contents, { binmode => $encoding });
-
-    return 0 unless $data;
-
-    my $response = $self->ua->request(PUT $url, Content => $data);
-
-    if ( $response->is_success ) {
-        return 1;
-    }
-    else {
-        croak "$url said " . $response->status_line;
-    }
-}
-
-=over
-
-=item get_new_upload_url()
-
-This method returns a scalar PUT upload URL for the specified sharename/fileid parameters. 
-Potentially useful in combination with C<send_file()>.
-
-=back
-
-=cut
-
-sub get_new_upload_url {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $endpoint = "/files/$sharename/$fileid/upload?accesstoken=".$self->access_token;
-
-    my $response = $self->_send('GET', $endpoint);
-
-    if ( $response && exists $response->{'puturl'} ) {
-        return $response->{'puturl'};
-    }
-    else {
-        croak "Could not get a PUT url from $endpoint";
-    }
-}
-
-=over
-
-=item destroy_file()
-
-This method destroys a file specified by the given sharename/fileid parameters. Returns a true value.
-
-=back
-
-=cut
-
-sub destroy_file {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    $self->login unless $self->has_access_token;
-
-    my $endpoint = "/files/$sharename/$fileid/destroy?accesstoken=".$self->access_token;
-
-    my $response = $self->_send('POST', $endpoint);
-
-    if ( $response ) {
-        return 1;
-    }
-    else {
-        return undef;
-    }
-}
-        
-sub _file_contents {
-    my $self = shift;
-    my $endpoint = $self->base_url . shift;
-
-    my $response = $self->ua->request(GET $endpoint);
-
-    if ( $response->is_success ) {
-        return $response->content();
-    }
-    else {
-        croak "$endpoint said " . $response->status_line;
-    }
-}
-
-=over
-
-=item get_file_contents()
-
-This method retrieves the contents of a file in the Gett service given by the sharename/fileid parameters.
-You are responsible for outputting the file (if desired) with any appropriate encoding.
-
-=back
-
-=cut
-
-sub get_file_contents {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    return $self->_file_contents("/files/$sharename/$fileid/blob");
-}
-
-=over
-
-=item get_thumbnail()
-
-This method returns a thumbnail if the file in Gett is an image. Requires a
-sharename and fileid.
-
-=back
-
-=cut
-
-sub get_thumbnail {
-    my $self = shift;
-    my $sharename = shift;
-    my $fileid = shift;
-
-    return $self->_file_contents("/files/$sharename/$fileid/blob/thumb");
-}
-
-=over
-
-=item get_scaled_contents()
-
-This method returns scaled image data (assuming the file in Gett is an image.) Requires
-sharename, fileid, width and height paramters, respectively.
-
-=back
-
-=cut
-
-sub get_scaled_contents {
-    my $self = shift;
-    my ( $sharename, $fileid, $width, $height ) = @_;
-
-    return $self->_file_contents("/files/$sharename/$fileid/blob/scale?size=$width"."x$height");
-}
-
 sub _build_share {
     my $self = shift;
     my $share_href = shift;
@@ -921,10 +392,11 @@ sub _build_share {
     );
     foreach my $file_href ( @{ $share_href->{'files'} } ) {
         next unless $file_href;
-        $share->add_file(
-            $self->_build_file($file_href)
-        );
+        my $file = $self->_build_file($file_href);
+        $share->add_file($file);
     }
+    $share->user($self->user) if $self->has_user;
+
     return $share;
 }
 
@@ -952,6 +424,7 @@ sub _build_file {
     }
 
     my $file = Net::API::Gett::File->new( %attrs );
+    $file->user($self->user) if $self->has_user;
 
     return $file;
 }
@@ -961,6 +434,8 @@ sub _build_file {
 =item add_share()
 
 This method populates/updates the L<Net::API::Gett:Share> object local cache.
+
+It returns undef if the passed value isn't a L<Net::API::Gett::Share> object.
 
 =back
 
