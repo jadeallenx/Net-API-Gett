@@ -6,10 +6,8 @@ use warnings;
 use v5.10;
 
 use Moo;
-use Sub::Quote;
-use Scalar::Util qw(looks_like_number);
-use File::Slurp qw(read_file);
 use Carp qw(croak);
+use Scalar::Util qw(looks_like_number);
 
 use Net::API::Gett::User;
 use Net::API::Gett::Share;
@@ -356,8 +354,14 @@ sub upload_file {
 
     my $response = $self->request->post($endpoint, { filename => $filename });
 
-    if ( not exists $opts->{'contents'} ) {
-        $opts->{'contents'} = $filename;
+    # typo proof this - yeah I've been bitten by this!
+    unless ( exists $opts->{'contents'} ) {
+        if ( exists $opts->{'content'} ) {
+            $opts->{'contents'} = delete $opts->{'content'};
+        }
+        else {
+            $opts->{'contents'} = $filename 
+        }
     }
 
     if ( $response ) {
@@ -404,28 +408,19 @@ sub _build_file {
     my $self = shift;
     my $file_href = shift;
 
-    my %attrs = (
-        filename => $file_href->{'filename'},
-        size => $file_href->{'size'},
-        created => $file_href->{'created'},
-        fileid => $file_href->{'fileid'},
-        downloads => $file_href->{'downloads'},
-        readystate => $file_href->{'readystate'},
-        url => $file_href->{'getturl'},
-        download => $file_href->{'downloadurl'},
-        sharename => $file_href->{'sharename'},
-    );
+    # filter out undefined attributes
+    my @attrs = grep { defined $file_href->{$_} } 
+        qw(filename size created fileid downloads readystate url download sharename);
+    my @params = map { $_ => $file_href->{$_} } @attrs;
 
     if ( exists $file_href->{'upload'} ) {
-        @attrs{'put_upload_url', 'post_upload_url'} = (
-                $file_href->{'upload'}->{'puturl'},
-                $file_href->{'upload'}->{'posturl'}
-        );
+        push @params, 'put_upload_url' => $file_href->{'upload'}->{'puturl'};
+        push @params, 'post_upload_url' => $file_href->{'upload'}->{'posturl'};
     }
 
-    my $file = Net::API::Gett::File->new( %attrs );
+    my $file = Net::API::Gett::File->new( @params );
     $file->user($self->user) if $self->has_user;
-
+    
     return $file;
 }
 
