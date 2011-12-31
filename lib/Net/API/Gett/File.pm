@@ -9,6 +9,7 @@ Net::API::Gett::File - Gett file object
 use Moo;
 use Sub::Quote;
 use Carp qw(croak);
+use File::Slurp qw(read_file);
 use MooX::Types::MooseLike qw(Int Str);
 
 our $VERSION = '0.02';
@@ -206,7 +207,7 @@ sub send_file {
 
     return 0 unless $data;
 
-    my $response = $self->request->put($url, Content => $data);
+    my $response = $self->request->put($url, $data);
 
     if ( $response ) {
         return 1;

@@ -4,6 +4,7 @@ use Moo;
 use Sub::Quote;
 use Carp qw(croak);
 use Scalar::Util qw(looks_like_number);
+use MooX::Types::MooseLike qw(Str Int);
 
 use Net::API::Gett::Request;
 
@@ -36,7 +37,7 @@ Scalar string. Read-only. C<has_api_key> predicate.
 has 'api_key' => ( 
     is  => 'ro',
     predicate => 'has_api_key',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[a-z0-9]+/ },
+    isa => Str,
 );
 
 =over 
@@ -68,7 +69,7 @@ Scalar string. Read-only. C<has_password> predicate.
 has 'password' => (
     is  => 'ro',
     predicate => 'has_password',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /\w+/ },
+    isa => Str,
 );
 
 =over
@@ -83,8 +84,9 @@ Scalar string. Populated by C<login> call. C<has_access_token()> predicate.
 
 has 'access_token' => (
     is        => 'rw',
+    writer    => '_set_access_token',
     predicate => 'has_access_token',
-    isa => quote_sub q{ die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
+    isa => Str,
 );
 
 =over
@@ -101,7 +103,8 @@ This value is suitable for use in a call to C<localtime()>.
 
 has 'access_token_expiration' => (
     is        => 'rw',
-    isa => sub { die "$_[0] is not a number" unless looks_like_number $_[0] }
+    writer    => '_set_access_token_expiration',
+    isa => Int,
 );
 
 =over
@@ -118,8 +121,9 @@ predicate.
 
 has 'refresh_token' => (
     is        => 'rw',
+    writer    => '_set_refresh_token',
     predicate => 'has_refresh_token',
-    isa => sub { die "$_[0] is not alphanumeric" unless $_[0] =~ /[\w\.-]+/ }
+    isa => Str,
 );
 
 =over
@@ -168,19 +172,26 @@ Scalar integer. In bytes.
 
 has 'userid' => (
     is => 'rw',
-    isa => sub { croak "$_[0] isn't alphanumeric\n" unless $_[0] =~ /[\w-]+/ },
+    writer => '_set_userid',
+    isa => Str
 );
 
 has 'fullname' => (
     is => 'rw',
+    writer => '_set_fullname',
+    isa => Str,
 );
 
 has 'storage_used' => (
     is => 'rw',
+    isa => Int,
+    writer => '_set_storage_used',
 );
 
 has 'storage_limit' => (
     is => 'rw',
+    isa => Int,
+    writer => '_set_storage_limit',
 );
 
 =head2 Account methods 
@@ -234,7 +245,7 @@ sub login {
             $self->password);
     }
     else {
-        return undef;
+        croak "I need either an api_key, email, and password or a refresh token to login";
     }
 
     my $response = $self->request->post('/users/login', \%hr);
@@ -243,9 +254,9 @@ sub login {
     # see https://open.ge.tt/1/doc/rest#users/login for response keys
 
     if ( $response ) {
-        $self->access_token( $response->{'accesstoken'} );
-        $self->access_token_expiration( time + $response->{'expires'} );
-        $self->refresh_token( $response->{'refreshtoken'} );
+        $self->_set_access_token( $response->{'accesstoken'} );
+        $self->_set_access_token_expiration( time + $response->{'expires'} );
+        $self->_set_refresh_token( $response->{'refreshtoken'} );
         $self->_set_attrs( $response->{'user'} );
         return $self;
     }
@@ -288,11 +299,10 @@ sub _set_attrs {
 
     return undef unless ref($uref) eq "HASH";
 
-    $self->userid($uref->{'userid'});
-    $self->fullname($uref->{'fullname'});
-    $self->email($uref->{'email'});
-    $self->storage_used($uref->{'storage'}->{'used'});
-    $self->storage_limit($uref->{'storage'}->{'limit'}),
+    $self->_set_userid($uref->{'userid'});
+    $self->_set_fullname($uref->{'fullname'});
+    $self->_set_storage_used($uref->{'storage'}->{'used'});
+    $self->_set_storage_limit($uref->{'storage'}->{'limit'}),
 }
 
 =head1 SEE ALSO
