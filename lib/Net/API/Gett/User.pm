@@ -3,12 +3,11 @@ package Net::API::Gett::User;
 use Moo;
 use Sub::Quote;
 use Carp qw(croak);
-use Scalar::Util qw(looks_like_number);
 use MooX::Types::MooseLike qw(Str Int);
 
 use Net::API::Gett::Request;
 
-our $VERSION = '0.02';
+our $VERSION = '1.00';
 
 =head1 NAME
 
@@ -21,14 +20,13 @@ this class on its own as the library will create and return this object when app
 
 =head1 ATTRIBUTES
 
-Here are the attributes of this class.  If they are read-write mutators, they behave in 
-a Perl-ish way: pass values to set them, pass no arguments to get current values.
+Here are the attributes of this class.  They are read only.
 
 =over 
 
 =item api_key
 
-Scalar string. Read-only. C<has_api_key> predicate.
+Scalar string. C<has_api_key> predicate.
 
 =back
 
@@ -44,7 +42,7 @@ has 'api_key' => (
 
 =item email
 
-Scalar string. Read-only. C<has_email> predicate.
+Scalar string. C<has_email> predicate.
 
 =back
 
@@ -60,7 +58,7 @@ has 'email' => (
 
 =item password
 
-Scalar string. Read-only. C<has_password> predicate.
+Scalar string. C<has_password> predicate.
 
 =back
 
@@ -194,7 +192,7 @@ has 'storage_limit' => (
     writer => '_set_storage_limit',
 );
 
-=head2 Account methods 
+=head1 METHODS 
 
 =over
 

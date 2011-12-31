@@ -7,11 +7,11 @@ Net::API::Gett::Share - Gett share object
 =cut
 
 use Moo;
-use Sub::Quote;
 use Carp qw(croak);
 use Array::Iterator;
+use MooX::Types::MooseLike qw(Int Str);
 
-our $VERSION = '0.02';
+our $VERSION = '1.00';
 
 =head1 PURPOSE
 
@@ -81,6 +81,7 @@ C<get_file_iterator()> below.
 
 has 'sharename' => (
     is => 'ro',
+    isa => Str,
 );
 
 has 'title' => (
@@ -89,6 +90,7 @@ has 'title' => (
 
 has 'created' => (
     is => 'ro',
+    isa => Int,
 );
 
 sub files {

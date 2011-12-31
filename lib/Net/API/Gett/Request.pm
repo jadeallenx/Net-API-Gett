@@ -7,7 +7,7 @@ use JSON;
 use LWP::UserAgent;
 use HTTP::Request::Common;
 
-our $VERSION = '0.02';
+our $VERSION = '1.00';
 
 =head1 NAME
 

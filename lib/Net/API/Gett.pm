@@ -24,11 +24,11 @@ Net::API::Gett - Perl bindings for Ge.tt API
 
 =head1 VERSION
 
-Version 0.02
+Version 1.00
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '1.00';
 
 =head1 SYNOPSIS
 
@@ -71,6 +71,13 @@ share up to 2 GB of files for free.  They recently implemented a REST API; this 
 binding for the API. See L<http://ge.tt/developers> for full details and how to get an
 API key.
 
+=head1 CHANGES FROM PREVIOUS VERSION
+
+This library is more encapsulated. Share functions which act on shares are in the L<Net::API::Gett::Share> 
+object namespace, and likewise with Ge.tt L<files|Net::API::Gett:File>. Future versions of this library 
+will modify the L<Request|Net::API::Gett::Request> and L<User|Net::API::Gett::User> objects to be 
+L<roles|Moo::Role> rather than objects.
+
 =cut
 
 sub BUILD {
@@ -87,9 +94,6 @@ sub BUILD {
 }
 
 =head1 ATTRIBUTES
-
-If attributes are read‐write mutators, they behave in a Perl‐ish way: 
-pass values to set them, pass no arguments to get current values.
 
 =over
 
@@ -132,6 +136,26 @@ which is not successful. If you need to handle errors more gracefully, use L<Try
 errors.
 
 =over
+
+=item new()
+
+Constructs a new object.  Optionally accepts:
+
+=over
+
+=item * A Ge.tt API key, email, and password, or,
+
+=item * A Ge.tt refresh token, or,
+
+=item * A Ge.tt access token
+
+=back
+
+If any of these parameters are passed, they will be proxied into the L<Net::API::Gett::User> object which
+will then permit you to make authenticated API calls.  Without an access token (or the means to acquire one)
+only non-authenticated calls are allowed; they are: C<get_share()>, C<get_file()> and C<$file->contents()>.
+
+=back
 
 =head2 Share functions
 
@@ -291,6 +315,10 @@ This method uploads a file to Gett. The following key/value pairs are valid:
 
 =over
 
+=item * filename (B<required>) 
+    
+What to call the uploaded file when it's inside of the Gett service.
+
 =item * sharename (optional) 
     
 If not specified, a new share will be automatically created.
@@ -299,27 +327,28 @@ If not specified, a new share will be automatically created.
     
 If specified, this value is used when creating a new share to hold the file.
 
-=item * filename (required) 
-    
-What to call the uploaded file when it's inside of the Gett service.
+=item * content (optional)
 
-=item * content (optional) 
+A synonym for C<contents>. (Yes, I've typo'd this too many times.) Anything in C<contents> has 
+precedent, though.
+
+=item * contents (optional) 
 
 A representation of the file's contents.  This can be one of:
 
 =over
 
-=item A buffer
+=item * A buffer
 
-=item An L<IO::Handle> object
+=item * An L<IO::Handle> object
 
-=item A FILEGLOB
+=item * A FILEGLOB
 
-=item A pathname to a file to be read
+=item * A pathname to a file to be read
 
 =back
 
-If not specified, the filename parameter is used as a pathname.
+If not specified, the C<filename> parameter is treated as a pathname.
 
 =item * encoding
 
@@ -476,7 +505,7 @@ sub shares {
 
 =head1 AUTHOR
 
-Mark Allen, C<mrallen1 at yahoo dot com>
+Mark Allen, C<< <mrallen1 at yahoo dot com> >>
 
 =head1 BUGS
 

@@ -7,6 +7,9 @@ my $builder = Module::Build->new(
     license             => 'perl',
     dist_author         => q{Mark Allen <mrallen1@yahoo.com>},
     dist_version_from   => 'lib/Net/API/Gett.pm',
+    configure_requires => {
+        'Module::Build' => 0.38,
+    },
     build_requires => {
         'Test::More'  => 0,
     },

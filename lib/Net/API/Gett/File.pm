@@ -12,7 +12,7 @@ use Carp qw(croak);
 use File::Slurp qw(read_file);
 use MooX::Types::MooseLike qw(Int Str);
 
-our $VERSION = '0.02';
+our $VERSION = '1.00';
 
 =head1 PURPOSE
 
@@ -166,26 +166,26 @@ has 'request' => (
     lazy => 1,
 );
 
+=head1 METHODS
+
 =over
 
 =item send_file()
 
 This method actually uploads the file to the Gett service. This method is normally invoked by the
-C<upload_file()> method, but it's a public method which might be useful in combination with 
-C<get_upload_url()>. It takes the following parameters:
+C<upload_file()> method, but it might be useful in combination with C<get_upload_url()>. It takes 
+the following parameters:
 
 =over
 
-=item * 
+=item * a Gett put upload url
 
-a PUT based Gett upload url
-
-=item * 
+=item * data
 
 a scalar representing the file contents which can be one of: a buffer, an L<IO::Handle> object, a FILEGLOB, or a 
 file pathname.
 
-=item *
+=item * encoding
 
 an encoding scheme. By default, it uses C<:raw> (see C<perldoc -f binmode> for more information.)
 
@@ -251,9 +251,9 @@ sub get_upload_url {
 
 =over
 
-=item destroy_file()
+=item destroy()
 
-This method destroys a file specified by the given sharename/fileid parameters. Returns a true value.
+This method destroys the file represented by the object. Returns a true value on success.
 
 =back
 
@@ -299,7 +299,7 @@ sub _file_contents {
 =item contents()
 
 This method retrieves the contents of a this file in the Gett service.  You are responsible for 
-outputting the file (if desired) with any appropriate encoding.
+outputting the file (if desired) with any appropriate encoding. Does not require an access token.
 
 =back
 
@@ -317,8 +317,8 @@ sub contents {
 
 =item thumbnail()
 
-This method returns a thumbnail if the file in Gett is an image. Requires a
-sharename and fileid.
+This method returns a thumbnail if the file in Gett is an image. Does not require an access token, but
+is really only meaningful if the data is a valid image format file.
 
 =back
 
