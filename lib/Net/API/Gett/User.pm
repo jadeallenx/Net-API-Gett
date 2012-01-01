@@ -1,13 +1,12 @@
 package Net::API::Gett::User;
 
 use Moo;
-use Sub::Quote;
 use Carp qw(croak);
 use MooX::Types::MooseLike qw(Str Int);
 
 use Net::API::Gett::Request;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 =head1 NAME
 

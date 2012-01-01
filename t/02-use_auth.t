@@ -3,7 +3,6 @@
 use strict;
 use Test::More;
 use File::Temp;
-use Data::Printer;
 
 if (!eval { require Socket; Socket::inet_aton('open.ge.tt') }) {
     plan skip_all => "Cannot connect to the API server";

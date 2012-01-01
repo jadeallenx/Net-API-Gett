@@ -11,6 +11,9 @@ my $builder = Module::Build->new(
         'Module::Build' => 0.38,
     },
     build_requires => {
+    },
+    test_requires => {
+        'File::Temp' => 0,
         'Test::More'  => 0,
     },
     requires => {

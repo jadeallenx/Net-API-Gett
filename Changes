@@ -1,5 +1,8 @@
 Revision history for Net-API-Gett
 
+1.01    2012-01-01
+        Fix test dependency failure (from CPAN testers) D'oh
+
 1.00    2011-12-31
         Refactor to use better object encapsulation.
 
