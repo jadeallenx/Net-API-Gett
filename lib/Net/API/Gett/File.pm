@@ -12,7 +12,7 @@ use Carp qw(croak);
 use File::Slurp qw(read_file);
 use MooX::Types::MooseLike qw(Int Str);
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 =head1 PURPOSE
 
@@ -31,7 +31,7 @@ Scalar string
 
 =item fileid
 
-Scalar integer
+Scalar string
 
 =item downloads
 
@@ -84,7 +84,7 @@ has 'filename' => (
 
 has 'fileid' => (
     is => 'ro',
-    isa => Int,
+    isa => Str,
 );
 
 has 'downloads' => (
@@ -187,7 +187,7 @@ file pathname.
 
 =item * encoding
 
-an encoding scheme. By default, it uses C<:raw> (see C<perldoc -f binmode> for more information.)
+an encoding scheme. By default, it uses C<:raw>.
 
 =back
 
@@ -203,8 +203,21 @@ sub send_file {
     my $contents = shift;
     my $encoding = shift || ":raw";
 
-    my $data = read_file($contents, { binmode => $encoding });
+    my $data;
+    if ( ! ref($contents) ) {
+        # $contents is scalar
+        if ( ! -e $contents ) {
+            # $contents doesn't point to a valid filename, 
+            # assume it's a buffer
 
+            # Make sure this data is stringified.
+            $data = $contents . "";
+        }
+    }
+
+    unless ( $data ) {
+        $data = read_file($contents, { binmode => $encoding });
+    }
     return 0 unless $data;
 
     my $response = $self->request->put($url, $data);

@@ -3,7 +3,7 @@ package Net::API::Gett;
 use strict;
 use warnings;
 
-use v5.10;
+use 5.010;
 
 use Moo;
 use Carp qw(croak);
@@ -24,15 +24,15 @@ Net::API::Gett - Perl bindings for Ge.tt API
 
 =head1 VERSION
 
-Version 1.01
+Version 1.02
 
 =cut
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 =head1 SYNOPSIS
 
-    use v5.10;
+    use 5.010;
     use Net::API::Gett;
 
     # Get API Key from http://ge.tt/developers
@@ -153,7 +153,8 @@ Constructs a new object.  Optionally accepts:
 
 If any of these parameters are passed, they will be proxied into the L<Net::API::Gett::User> object which
 will then permit you to make authenticated API calls.  Without an access token (or the means to acquire one)
-only non-authenticated calls are allowed; they are: C<get_share()>, C<get_file()> and C<$file->contents()>.
+only non-authenticated calls are allowed; they are: C<get_share()>, C<get_file()>, 
+C<$file-E<gt>thumbnail()> and C<$file-E<gt>contents()>.
 
 =back
 
@@ -321,16 +322,17 @@ What to call the uploaded file when it's inside of the Gett service.
 
 =item * sharename (optional) 
     
-If not specified, a new share will be automatically created.
+Where to store the uploaded file. If not specified, a new share will be automatically created.
 
 =item * title (optional) 
     
-If specified, this value is used when creating a new share to hold the file.
+If specified, this value is used when creating a new share to hold the file. It will not change
+the title of an existing share. See the C<update()> method on the share object to do that.
 
 =item * content (optional)
 
 A synonym for C<contents>. (Yes, I've typo'd this too many times.) Anything in C<contents> has 
-precedent, though.
+precedent, if they're both specified.
 
 =item * contents (optional) 
 
@@ -338,7 +340,7 @@ A representation of the file's contents.  This can be one of:
 
 =over
 
-=item * A buffer
+=item * A buffer (See note below)
 
 =item * An L<IO::Handle> object
 
@@ -348,11 +350,14 @@ A representation of the file's contents.  This can be one of:
 
 =back
 
-If not specified, the C<filename> parameter is treated as a pathname.
+If not specified, the C<filename> parameter is treated as a pathname. This attempts to be DWIM, 
+in the sense that if C<contents> contains a value which is not a valid filename, it treats 
+C<contents> as a buffer and uploads that data.
 
 =item * encoding
 
-An encoding scheme for the file content. By default it uses C<:raw>
+An encoding scheme for the file content. By default it uses C<:raw>. See C<perldoc -f binmode> 
+for more information about encodings.
 
 =back
 
@@ -385,7 +390,7 @@ sub upload_file {
 
     # typo proof this - yeah I've been bitten by this!
     unless ( exists $opts->{'contents'} ) {
-        if ( exists $opts->{'content'} ) {
+            if ( exists $opts->{'content'} ) {
             $opts->{'contents'} = delete $opts->{'content'};
         }
         else {
@@ -558,6 +563,10 @@ Thanks to the following for patches:
 =item
 
 Keedi Kim (L<https://github.com/keedi>)
+
+=item
+
+Alexander Ost
 
 =back
 

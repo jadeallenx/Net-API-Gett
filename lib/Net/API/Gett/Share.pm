@@ -11,7 +11,7 @@ use Carp qw(croak);
 use Array::Iterator;
 use MooX::Types::MooseLike qw(Int Str);
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 =head1 PURPOSE
 

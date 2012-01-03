@@ -1,5 +1,8 @@
 Revision history for Net-API-Gett
 
+1.02    2012-01-02
+        Fix for RT #73671 - Thanks to Alexander Ost for the report and patch
+
 1.01    2012-01-01
         Fix test dependency failure (from CPAN testers) D'oh
 
