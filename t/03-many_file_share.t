@@ -10,7 +10,7 @@ if (!eval { require Socket; Socket::inet_aton('open.ge.tt') }) {
     plan skip_all => "Cannot connect to the API server";
 } 
 else {
-    plan tests => 5;
+    plan tests => 6;
 }
  
 my $g = Net::API::Gett->new();

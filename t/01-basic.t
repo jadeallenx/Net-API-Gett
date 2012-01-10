@@ -7,7 +7,7 @@ if (!eval { require Socket; Socket::inet_aton('open.ge.tt') }) {
     plan skip_all => "Cannot connect to the API server";
 } 
 else {
-    plan tests => 14;
+    plan tests => 15;
 }
 
 use Net::API::Gett;
@@ -42,6 +42,7 @@ isa_ok($file, 'Net::API::Gett::File', "file object constructed");
 is($file->created, 1322847473, "got file created");
 is($file->fileid, 0, "got fileid");
 is($file->filename, "hello.c", "got filename");
+is(defined $file->getturl, 1, "getturl defined");
 
 my $contents = $file->contents;
 
