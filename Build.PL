@@ -11,8 +11,6 @@ my $builder = Module::Build->new(
         'Module::Build' => 0.38,
     },
     build_requires => {
-    },
-    test_requires => {
         'File::Temp' => 0,
         'Test::More'  => 0,
     },
@@ -25,7 +23,7 @@ my $builder = Module::Build->new(
         'JSON'        => 0,
         'File::Slurp' => 0,
         'Array::Iterator' => 0,
-        'MooX::Types::MooseLike' => 0,
+        'MooX::Types::MooseLike' => '0.02',
     },
     add_to_cleanup      => [ 'Net-API-Gett-*' ],
     create_makefile_pl => 'traditional',
