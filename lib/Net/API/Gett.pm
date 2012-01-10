@@ -427,6 +427,7 @@ sub _build_share {
         sharename => $share_href->{'sharename'},
         created => $share_href->{'created'},
         title => $share_href->{'title'},
+        getturl => $share_href->{'getturl'},
     );
     foreach my $file_href ( @{ $share_href->{'files'} } ) {
         next unless $file_href;
