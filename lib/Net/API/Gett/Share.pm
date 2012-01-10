@@ -68,6 +68,10 @@ Scalar string.
 
 Scalar integer. Read only. This value is in Unix epoch seconds, suitable for use in a call to C<localtime()>.
 
+=item getturl
+
+Scalar string. The URL to use in a browser to access a share.
+
 =item files
 
 This attribute holds any L<Net::API::Gett:File> objects linked to a particular 
@@ -91,6 +95,11 @@ has 'title' => (
 has 'created' => (
     is => 'ro',
     isa => Int,
+);
+
+has 'getturl' => (
+    is => 'ro',
+    isa => Str,
 );
 
 sub files {
