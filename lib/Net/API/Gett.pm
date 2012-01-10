@@ -50,7 +50,7 @@ our $VERSION = '1.02';
         encoding => ":encoding(UTF-8)" 
     );
 
-    say "File has been shared at " . $file_obj->url;
+    say "File has been shared at " . $file_obj->getturl;
 
     # Download contents
     my $file_contents = $file_obj->contents();
@@ -444,7 +444,7 @@ sub _build_file {
 
     # filter out undefined attributes
     my @attrs = grep { defined $file_href->{$_} } 
-        qw(filename size created fileid downloads readystate url download sharename);
+        qw(filename size created fileid downloads readystate getturl download sharename);
     my @params = map { $_ => $file_href->{$_} } @attrs;
 
     if ( exists $file_href->{'upload'} ) {
