@@ -12,7 +12,7 @@ use Carp qw(croak);
 use File::Slurp qw(read_file);
 use MooX::Types::MooseLike qw(Int Str);
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 =head1 PURPOSE
 

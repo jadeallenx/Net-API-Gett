@@ -1,5 +1,9 @@
 Revision history for Net-API-Gett
 
+1.03    2012-01-10
+        Patch from @keedi to fix the getturl attribute on file objects.
+        Set MooX::Types::MooseLike to be version 0.02 (unreleased version 0.03 breaks API)
+
 1.02    2012-01-02
         Fix for RT #73671 - Thanks to Alexander Ost for the report and patch
 
