@@ -59,6 +59,22 @@ has 'ua' => (
     isa => sub { die "$_[0] is not LWP::UserAgent" unless ref($_[0])=~/UserAgent/ },
 );
 
+=over
+
+=item chunk_size
+
+Chunk size(bytes) to upload. Default value: 10485760
+
+=back
+
+=cut
+
+has 'chunk_size' => (
+    is      => 'rw',
+    isa     => sub { die "$_[0] is not a number" unless $_[0] =~ /^\d+$/ },
+    default => sub { 10485760 },
+);
+
 
 sub _encode {
     my $self = shift;
@@ -214,7 +230,30 @@ sub put {
     my $url = shift;
     my $data = shift;
 
-    my $response = $self->ua->request(PUT $url, Content => $data);
+    my $response;
+    if ( !ref($data) ) {
+        $response = $self->ua->request(PUT $url, Content => $data);
+    }
+    else {
+        local $HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
+
+        my $header = HTTP::Headers->new;
+        $header->content_length(-s $$data);
+
+        open my $fh, $$data
+            or die "cannot open $$data: $!\n";
+        my $req = HTTP::Request->new(
+            'PUT',
+            $url,
+            $header,
+            sub {
+                my $ret = read $fh, my $chunk, $self->chunk_size;
+                return $ret ? $chunk : ();
+            },
+        );
+        $response = $self->ua->request($req);
+        close $fh;
+    }
 
     if ( $response->is_success ) {
         return 1;
