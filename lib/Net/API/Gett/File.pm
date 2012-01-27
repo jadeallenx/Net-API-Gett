@@ -216,9 +216,14 @@ sub send_file {
     }
 
     unless ( $data ) {
-        $data = read_file($contents, { binmode => $encoding });
+        if ( $encoding ne ':raw' || -s $contents < $self->request->chunk_size ) {
+            $data = read_file($contents, { binmode => $encoding });
+            return 0 unless $data;
+        }
+        else {
+            $data = \$contents;
+        }
     }
-    return 0 unless $data;
 
     my $response = $self->request->put($url, $data);
 
