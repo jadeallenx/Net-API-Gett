@@ -6,8 +6,9 @@ use Carp qw(croak);
 use JSON;
 use LWP::UserAgent;
 use HTTP::Request::Common;
+use HTTP::Headers;
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 =head1 NAME
 
@@ -189,7 +190,11 @@ Input:
 
 =item * Full endpoint
 
-=item * Data
+=item * Data filehandle
+
+=item * A chunksize
+
+=item * the length of the data in bytes
 
 =back
 
@@ -212,10 +217,29 @@ This method will die under any error condition.
 sub put {
     my $self = shift;
     my $url = shift;
-    my $data = shift;
+    my $fh = shift;
+    my $chunk_size = shift;
+    my $length = shift;
 
-    my $response = $self->ua->request(PUT $url, Content => $data);
+    local $HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
 
+    my $header = HTTP::Headers->new;
+    $header->content_length($length);
+
+    my $req = HTTP::Request->new(
+        'PUT',
+        $url,
+        $header,
+        sub {
+            my $ret = read($fh, my $chunk, $chunk_size);
+            return $ret ? $chunk : ();
+        },
+    );
+
+    my $response = $self->ua->request($req);
+
+    close $fh;
+    
     if ( $response->is_success ) {
         return 1;
     }

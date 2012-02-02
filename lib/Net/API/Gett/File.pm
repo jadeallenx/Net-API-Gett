@@ -7,12 +7,10 @@ Net::API::Gett::File - Gett file object
 =cut
 
 use Moo;
-use Sub::Quote;
 use Carp qw(croak);
-use File::Slurp qw(read_file);
 use MooX::Types::MooseLike qw(Int Str);
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 =head1 PURPOSE
 
@@ -21,17 +19,17 @@ its own, as the library will create and return this object as appropriate.
 
 =head1 ATTRIBUTES
 
-These are read only attributes. 
+These are read only attributes unless otherwise noted. 
 
 =over 
 
 =item filename
 
-Scalar string
+Scalar string.
 
 =item fileid
 
-Scalar string
+Scalar string.
 
 =item downloads
 
@@ -72,6 +70,11 @@ attribute is only populated during certain times.)
 
 Scalar string. This url to use to upload the contents of this file using the POST method. (This
 attribute is only populated during certain times.)
+
+=item chunk_size
+
+Scalar integer. This is the chunk size to use for file uploads. It defaults to 
+1,048,576 bytes (1 MB).  This attribute is read-only.
 
 =back
 
@@ -132,6 +135,12 @@ has 'post_upload_url' => (
     isa => Str,
 );
 
+has 'chunk_size' => (
+    is => 'rw',
+    isa => Int,
+    default => sub { 1_048_576; },
+);
+
 =over
 
 =item user
@@ -182,12 +191,17 @@ the following parameters:
 
 =item * data
 
-a scalar representing the file contents which can be one of: a buffer, an L<IO::Handle> object, a FILEGLOB, or a 
+a scalar representing the file contents which can be one of: a buffer, an L<IO::Handle> object, or a 
 file pathname.
 
 =item * encoding
 
 an encoding scheme. By default, it uses C<:raw>.
+
+=item * chunk_size
+
+The maximum chunksize to load into to memory at one time.  If the file to transmit is larger than
+this size, it will be dynamically streamed.
 
 =back
 
@@ -202,25 +216,36 @@ sub send_file {
     my $url = shift;
     my $contents = shift;
     my $encoding = shift || ":raw";
+    my $chunk_size = shift || $self->chunk_size || 1_048_576; # 1024 * 1024 = 1 MB
 
-    my $data;
+    my $fh;
+    my $length;
     if ( ! ref($contents) ) {
         # $contents is scalar
         if ( ! -e $contents ) {
             # $contents doesn't point to a valid filename, 
             # assume it's a buffer
 
+            $contents .= "";
             # Make sure this data is stringified.
-            $data = $contents . "";
+            open($fh, "<", \$contents) or croak "Couldn't open a filehandle on the content buffer\n";
+            binmode($fh, $encoding);
+            $length = length($contents);
+        }
+        else {
+            open($fh, "<", $contents) or croak "Couldn't open a filehandle on $contents: $!";
+            binmode($fh, $encoding);
+            $length = -s $contents;
         }
     }
-
-    unless ( $data ) {
-        $data = read_file($contents, { binmode => $encoding });
+    else {
+       $fh = $contents if ref($contents) =~ /IO/;
+       $length = -s $fh;
     }
-    return 0 unless $data;
 
-    my $response = $self->request->put($url, $data);
+    return 0 unless $fh;
+
+    my $response = $self->request->put($url, $fh, $chunk_size, $length);
 
     if ( $response ) {
         return 1;

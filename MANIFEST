@@ -13,6 +13,7 @@ t/00-load.t
 t/01-basic.t
 t/02-use_auth.t
 t/03-many_file_share.t
+t/04-chunked_upload.t
 t/manifest.t
 t/pod.t
 Makefile.PL

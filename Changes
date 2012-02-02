@@ -1,5 +1,9 @@
 Revision history for Net-API-Gett
 
+1.04    2012-02-01
+        Reworked a patch from @keedi to chunk file uploads dynamically. This cuts 
+        RAM usage substantially.
+
 1.03    2012-01-10
         Patch from @keedi to fix the getturl attribute on file objects.
         Set MooX::Types::MooseLike to be version 0.02 (unreleased version 0.03 breaks API)

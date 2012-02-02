@@ -24,11 +24,11 @@ Net::API::Gett - Perl bindings for Ge.tt API
 
 =head1 VERSION
 
-Version 1.03
+Version 1.04
 
 =cut
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 =head1 SYNOPSIS
 
@@ -359,6 +359,10 @@ C<contents> as a buffer and uploads that data.
 An encoding scheme for the file content. By default it uses C<:raw>. See C<perldoc -f binmode> 
 for more information about encodings.
 
+=item * chunk_size
+
+The chunk_size in bytes to use when uploading a file.  Defaults to 1 MB.
+
 =back
 
 Returns a L<Net::API::Gett:File> object representing the uploaded file.
@@ -403,7 +407,8 @@ sub upload_file {
         if ( $file->readystate eq "remote" ) {
             my $put_upload_url = $file->put_upload_url;
             croak "Didn't get put upload URL from $endpoint" unless $put_upload_url;
-            if ( $file->send_file($put_upload_url, $opts->{'contents'}, $opts->{'encoding'}) ) {
+            if ( $file->send_file($put_upload_url, $opts->{'contents'}, 
+                        $opts->{'encoding'}, $opts->{'chunk_size'}) ) {
                 return $file;
             }
             else {
