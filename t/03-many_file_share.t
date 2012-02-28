@@ -21,7 +21,7 @@ isa_ok($share, 'Net::API::Gett::Share', "Share");
 like($share->title, qr/Many/, "Has right share title");
 is(scalar $share->files, 14, "Has right number of files");
  
-my $file = ($share->files)[0]; # 11
+my $file = ($share->files)[0]; # 14
 isa_ok($file, 'Net::API::Gett::File', "File");
-is($file->fileid, "9e", "Has right non-integer file id");
-is($file->getturl, "http://ge.tt/6s6enNB/9e", "right getturl");
+is($file->fileid, "2f", "Has right non-integer file id");
+is($file->getturl, "http://ge.tt/6s6enNB/v/2f", "right getturl");
