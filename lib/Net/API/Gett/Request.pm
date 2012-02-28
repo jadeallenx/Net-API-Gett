@@ -8,7 +8,7 @@ use LWP::UserAgent;
 use HTTP::Request::Common;
 use HTTP::Headers;
 
-our $VERSION = '1.04';
+our $VERSION = '1.05';
 
 =head1 NAME
 

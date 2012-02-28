@@ -6,7 +6,7 @@ use MooX::Types::MooseLike qw(Str Int);
 
 use Net::API::Gett::Request;
 
-our $VERSION = '1.04';
+our $VERSION = '1.05';
 
 =head1 NAME
 

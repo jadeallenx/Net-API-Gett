@@ -24,11 +24,11 @@ Net::API::Gett - Perl bindings for Ge.tt API
 
 =head1 VERSION
 
-Version 1.04
+Version 1.05
 
 =cut
 
-our $VERSION = '1.04';
+our $VERSION = '1.05';
 
 =head1 SYNOPSIS
 

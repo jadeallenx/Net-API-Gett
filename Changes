@@ -1,5 +1,8 @@
 Revision history for Net-API-Gett
 
+1.05    2012-02-28
+        @keedi fixed a failed test (due to internal Gett URL format change)
+
 1.04    2012-02-01
         Reworked a patch from @keedi to chunk file uploads dynamically. This cuts 
         RAM usage substantially.
