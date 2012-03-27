@@ -9,9 +9,9 @@ Net::API::Gett::Share - Gett share object
 use Moo;
 use Carp qw(croak);
 use Array::Iterator;
-use MooX::Types::MooseLike qw(Int Str);
+use MooX::Types::MooseLike::Base qw(Int Str);
 
-our $VERSION = '1.05';
+our $VERSION = '1.06';
 
 =head1 PURPOSE
 

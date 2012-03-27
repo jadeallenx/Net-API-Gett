@@ -1,5 +1,8 @@
 Revision history for Net-API-Gett
 
+1.06    2012-03-26
+        Fix ups for Moox::Types::MooseLike v0.03
+
 1.05    2012-02-28
         @keedi fixed a failed test (due to internal Gett URL format change)
 

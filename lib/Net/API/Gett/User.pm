@@ -2,11 +2,11 @@ package Net::API::Gett::User;
 
 use Moo;
 use Carp qw(croak);
-use MooX::Types::MooseLike qw(Str Int);
+use MooX::Types::MooseLike::Base qw(Int Str);
 
 use Net::API::Gett::Request;
 
-our $VERSION = '1.05';
+our $VERSION = '1.06';
 
 =head1 NAME
 
